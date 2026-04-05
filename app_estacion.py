@@ -13,7 +13,8 @@ TABLA_COMISIONES = {
     'DIESEL': 4.0,
     'KEROSENE': 6.0,
     'ACEITE MOTOR': 500.0,
-    'ADBLUE': 16.0
+    'ADBLUE': 16.0,
+    'bidon 20lt comb gas': 10000
 }
 
 # =========================================================
