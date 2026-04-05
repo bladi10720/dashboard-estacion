@@ -15,7 +15,8 @@ TABLA_COMISIONES = {
     'ACEITE MOTOR': 500.0,
     'ADBLUE': 16.0,
     'bidon 20 lt comb gas': 10000,
-    'Gasolina 93 octanos': 10000
+    'Gasolina 93 octanos': 10000,
+    'V-POWER Gasolina 97 ': 10000
 }
 
 # =========================================================
