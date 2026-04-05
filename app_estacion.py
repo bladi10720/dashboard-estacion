@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
-import glob
-import os
 import plotly.express as px
+import io
 
 # =========================================================
 # 1. CONFIGURACIÓN DE COMISIONES
@@ -14,7 +13,7 @@ TABLA_COMISIONES = {
     'DIESEL': 4.0,
     'KEROSENE': 6.0,
     'ACEITE MOTOR': 500.0,
-    'ADBLUE':16
+    'ADBLUE': 16.0
 }
 
 # =========================================================
@@ -22,44 +21,58 @@ TABLA_COMISIONES = {
 # =========================================================
 st.set_page_config(page_title="Estación Pro - Reportes", layout="wide", page_icon="⛽")
 
-# Estilo CSS para que las métricas y contenedores resalten
+# Estilo CSS para mejorar la apariencia
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
     [data-testid="stMetricValue"] { font-size: 28px; color: #004b87; }
-    .stSelectbox, .stMultiSelect { background-color: #ffffff; border-radius: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
+st.title("⛽ Sistema de Gestión de Ventas - Estación Pro")
+
 # =========================================================
-# 3. CARGA DE DATOS (Mantenemos tu lógica robusta)
+# 3. CARGA DE DATOS (NUEVO: BOTÓN DE SUBIDA)
 # =========================================================
+# Este cuadro aparecerá ahora en el centro de tu pantalla
+archivos_subidos = st.file_uploader(
+    "📂 Selecciona tus archivos Excel 'Ventas_*.xlsx'", 
+    type=['xlsx'], 
+    accept_multiple_files=True
+)
+
 @st.cache_data
-def cargar_datos_maestros():
-    ruta_carpeta = os.path.dirname(__file__)
-    patron = os.path.join(ruta_carpeta, "Ventas_*.xlsx")
-    archivos = glob.glob(patron)
+def procesar_archivos(lista_archivos):
     columnas = ['Fecha', 'Hora', 'Descripcion', 'Cantidad', 'Valor', 'Nombre Cajero', 'MOP1']
-    lista = []
-    for arc in archivos:
+    lista_df = []
+    for arc in lista_archivos:
         try:
+            # Leer el archivo directamente de la memoria (subida web)
             df = pd.read_excel(arc, skiprows=7)
+            # Seleccionar solo las columnas necesarias
             df_sel = df[columnas].copy()
+            # Convertir fecha y limpiar filas vacías
             df_sel['Fecha'] = pd.to_datetime(df_sel['Fecha'], dayfirst=True, errors='coerce')
             df_sel = df_sel.dropna(subset=['Fecha'])
-            lista.append(df_sel)
-        except: continue
-    return pd.concat(lista, ignore_index=True) if lista else None
+            lista_df.append(df_sel)
+        except Exception as e:
+            st.warning(f"No se pudo procesar un archivo: {arc.name}")
+            continue
+    
+    if lista_df:
+        return pd.concat(lista_df, ignore_index=True)
+    return None
 
-df_base = cargar_datos_maestros()
+# Ejecutar la carga solo si hay archivos
+df_base = None
+if archivos_subidos:
+    df_base = procesar_archivos(archivos_subidos)
 
 # =========================================================
-# 4. CUERPO PRINCIPAL Y FILTROS ORGANIZADOS
+# 4. CUERPO PRINCIPAL Y FILTROS
 # =========================================================
 if df_base is not None:
-    st.title("⛽ Sistema de Gestión de Ventas")
-    
-    # --- FILTROS EN COLUMNAS (Estilo Header) ---
+    # --- PANEL DE FILTROS ---
     with st.expander("🔍 Panel de Filtros Avanzados", expanded=True):
         f1, f2, f3, f4 = st.columns(4)
         
@@ -83,6 +96,7 @@ if df_base is not None:
     mask = (df_base['Nombre Cajero'].isin(vendedores)) & \
            (df_base['MOP1'].isin(medios)) & \
            (df_base['Descripcion'].isin(productos_sel))
+    
     if len(rango) == 2:
         mask &= (df_base['Fecha'] >= pd.Timestamp(rango[0])) & (df_base['Fecha'] <= pd.Timestamp(rango[1]))
     
@@ -90,40 +104,37 @@ if df_base is not None:
 
     # Cálculo de Comisión
     df_filtrado['Pago_Comision'] = df_filtrado.apply(
-        lambda x: x['Cantidad'] * TABLA_COMISIONES.get(x['Descripcion'], 0), axis=1
+        lambda x: x['Cantidad'] * TABLA_COMISIONES.get(str(x['Descripcion']).upper(), 0), axis=1
     )
 
     # --- MÉTRICAS PRINCIPALES ---
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Recaudación", f"$ {df_filtrado['Valor'].sum():,.0f}")
-    m2.metric("Comisiones", f"$ {df_filtrado['Pago_Comision'].sum():,.0f}")
-    m3.metric("Litros/Unid.", f"{df_filtrado['Cantidad'].sum():,.1f}")
-    m4.metric("Ventas", len(df_filtrado))
-
     st.divider()
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Recaudación Total", f"$ {df_filtrado['Valor'].sum():,.0f}")
+    m2.metric("Comisiones a Pagar", f"$ {df_filtrado['Pago_Comision'].sum():,.0f}")
+    m3.metric("Litros/Unidades", f"{df_filtrado['Cantidad'].sum():,.1f}")
+    m4.metric("N° de Ventas", len(df_filtrado))
 
-    # --- CONTENIDO ---
-    col_izq, col_der = st.columns([1, 1]) # 50% y 50%
+    # --- GRÁFICOS Y TABLAS ---
+    col_izq, col_der = st.columns([1, 1])
 
     with col_izq:
         st.subheader("💰 Resumen de Liquidación")
         resumen = df_filtrado.groupby('Nombre Cajero')['Pago_Comision'].sum().reset_index()
         resumen.columns = ['Cajero', 'Total Comisiones']
-        st.dataframe(resumen.style.format({'Total Comisiones': '$ {:,.0f}'})
-                     .highlight_max(subset=['Total Comisiones'], color='#e1f5fe'), 
+        st.dataframe(resumen.style.format({'Total Comisiones': '$ {:,.0f}'}), 
                      use_container_width=True)
 
     with col_der:
-        # Gráfico de Horas Pico (Más limpio)
+        st.subheader("📈 Flujo de Ventas por Hora")
         df_filtrado['Hora_H'] = df_filtrado['Hora'].astype(str).str[:2]
         ventas_hora = df_filtrado.groupby('Hora_H').size().reset_index(name='Tickets')
-        fig_h = px.area(ventas_hora, x='Hora_H', y='Tickets', title="Flujo de Clientes",
-                        color_discrete_sequence=['#004b87'])
+        fig_h = px.bar(ventas_hora, x='Hora_H', y='Tickets', 
+                       color_discrete_sequence=['#004b87'])
         st.plotly_chart(fig_h, use_container_width=True)
 
-    # Tabla de detalle al final
-    with st.expander("📋 Ver detalle de todas las transacciones filtradas"):
+    with st.expander("📋 Ver detalle de todas las transacciones"):
         st.write(df_filtrado)
 
 else:
-    st.info("👋 Sube tus archivos Excel 'Ventas_*.xlsx' para comenzar.")
+    st.info("👋 Por favor, selecciona tus archivos Excel 'Ventas_*.xlsx' en el cuadro de arriba para comenzar el análisis.")
