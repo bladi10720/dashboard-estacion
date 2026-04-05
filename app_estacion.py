@@ -106,10 +106,10 @@ if df_base is not None:
     df_filtrado = df_base.loc[mask].copy()
 
     # Cálculo de Comisión
+    # Busca esta parte en tu app_estacion.py
     df_filtrado['Pago_Comision'] = df_filtrado.apply(
-        lambda x: x['Cantidad'] * TABLA_COMISIONES.get(str(x['Descripcion']).upper(), 0), axis=1
-    )
-
+    lambda x: x['Cantidad'] * TABLA_COMISIONES.get(str(x['Descripcion']).strip().upper(), 0), axis=1
+)
     # --- MÉTRICAS PRINCIPALES ---
     st.divider()
     m1, m2, m3, m4 = st.columns(4)
