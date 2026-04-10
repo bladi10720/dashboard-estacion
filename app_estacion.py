@@ -16,7 +16,8 @@ TABLA_COMISIONES = {
     'KEROSENE': 6.0,
     'ACEITE MOTOR': 500.0,
     'ADBLUE': 16.0,
-    'DIXSEL': 100.0
+    'DIXSEL': 100.0,
+    'Petroleo Diesel G-B': 100.0
 }
 
 # =========================================================
