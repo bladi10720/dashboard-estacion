@@ -59,10 +59,14 @@ def guardar_comisiones(comisiones):
         return False
 
 # Cargar comisiones al iniciar
+# Cargar comisiones al iniciar
 if 'TABLA_COMISIONES' not in st.session_state:
-    # Variables para controlar la carga automática
+    st.session_state.TABLA_COMISIONES = cargar_comisiones()
+
+# Variables para controlar la carga automática (esto va FUERA del if anterior)
 if 'datos_cargados' not in st.session_state:
     st.session_state.datos_cargados = None
+
 if 'tipo_carga' not in st.session_state:
     st.session_state.tipo_carga = None
     st.session_state.TABLA_COMISIONES = cargar_comisiones()
