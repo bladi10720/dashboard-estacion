@@ -4,17 +4,18 @@ import plotly.express as px
 import io
 import re
 from datetime import datetime
+from difflib import get_close_matches
 
 # =========================================================
 # 1. CONFIGURACIÓN DE COMISIONES MEJORADA
 # =========================================================
 TABLA_COMISIONES = {
-    # Códigos (como strings)
-    '966879': 1000.0,    # Gasolina 93
-    '102': 8.0,          # Gasolina 95
-    '1050': 15.0,        # Limpiaparabrisas
+    # Códigos
+    '966879': 1000.0,
+    '102': 8.0,
+    '1050': 15.0,
     
-    # Nombres (normalizados)
+    # Nombres exactos
     'GASOLINA 97': 10.0,
     'DIESEL': 4.0,
     'KEROSENE': 6.0,
@@ -24,48 +25,118 @@ TABLA_COMISIONES = {
     'PETROLEO DIESEL G-B': 100.0,
     'GASOLINA 93': 1000.0,
     'GASOLINA 95': 8.0,
-    'bidon 20 lt comb gas': 5000
+    
+    # Bidón 20 litros (múltiples variantes)
+    'BIDON 20 LT COMB GAS': 5000.0,
+    'BIDON 20L COMB GAS': 5000.0,
+    'BIDON 20 LT': 5000.0,
+    'BIDON 20L': 5000.0,
+    'BIDON GASOLINA 20L': 5000.0,
+    'BIDON 20 LITROS': 5000.0,
+    'BIDON COMB GAS': 5000.0,
+    '20 LT BIDON': 5000.0,
+}
+
+# Palabras clave para búsqueda flexible
+PALABRAS_CLAVE_COMISIONES = {
+    'BIDON': 5000.0,
+    'BIDON 20': 5000.0,
+    '20 LT': 5000.0,
+    '20L': 5000.0,
+    'COMB GAS': 5000.0,
 }
 
 # =========================================================
 # 2. FUNCIONES AUXILIARES
 # =========================================================
 def normalizar_texto(texto):
-    """Normaliza texto para búsqueda (mayúsculas, sin espacios extra)"""
+    """Normaliza texto para búsqueda"""
     if pd.isna(texto) or texto is None:
         return ''
-    return str(texto).upper().strip()
+    # Convertir a mayúsculas, eliminar espacios extras y caracteres especiales
+    texto = str(texto).upper().strip()
+    # Eliminar múltiples espacios
+    texto = re.sub(r'\s+', ' ', texto)
+    # Eliminar caracteres especiales comunes
+    texto = re.sub(r'[°\-_/\\|]', ' ', texto)
+    return texto.strip()
 
-def calcular_comision_segura(fila, tabla_comisiones):
+def buscar_comision_por_similitud(nombre_producto, tabla_comisiones, umbral=0.8):
     """
-    Versión mejorada con manejo de errores y logging
+    Busca comisión usando similitud de texto (fuzzy matching)
+    """
+    if not nombre_producto:
+        return None
+    
+    nombres_disponibles = list(tabla_comisiones.keys())
+    
+    # Buscar nombres similares
+    matches = get_close_matches(nombre_producto, nombres_disponibles, n=1, cutoff=umbral)
+    
+    if matches:
+        return tabla_comisiones[matches[0]]
+    
+    return None
+
+def buscar_comision_por_palabras_clave(nombre_producto, palabras_clave):
+    """
+    Busca comisión usando palabras clave
+    """
+    if not nombre_producto:
+        return None
+    
+    nombre_upper = nombre_producto.upper()
+    
+    for palabra, comision in palabras_clave.items():
+        if palabra in nombre_upper:
+            return comision
+    
+    return None
+
+def calcular_comision_segura(fila, tabla_comisiones, palabras_clave):
+    """
+    Versión mejorada con múltiples estrategias de búsqueda
     """
     try:
         cantidad = fila.get('Cantidad', 0)
         if pd.isna(cantidad) or cantidad <= 0:
             return 0.0
         
-        # 1. Intentar por código (prioridad)
+        # Obtener código y nombre del producto
         codigo = normalizar_texto(fila.get('cod Producto', ''))
-        if codigo and codigo in tabla_comisiones:
-            return float(cantidad) * tabla_comisiones[codigo]
-        
-        # 2. Intentar por nombre (sin código)
         nombre = normalizar_texto(fila.get('Descripcion', ''))
         
-        # Búsqueda exacta
-        if nombre in tabla_comisiones:
-            return float(cantidad) * tabla_comisiones[nombre]
+        comision_por_unidad = None
         
-        # 3. Búsqueda parcial (opcional - para nombres similares)
-        for key, valor in tabla_comisiones.items():
-            if key in nombre or nombre in key:
-                return float(cantidad) * valor
+        # ESTRATEGIA 1: Buscar por código
+        if codigo and codigo in tabla_comisiones:
+            comision_por_unidad = tabla_comisiones[codigo]
         
+        # ESTRATEGIA 2: Buscar por nombre exacto
+        elif nombre and nombre in tabla_comisiones:
+            comision_por_unidad = tabla_comisiones[nombre]
+        
+        # ESTRATEGIA 3: Buscar por similitud (fuzzy matching)
+        elif nombre:
+            comision_simil = buscar_comision_por_similitud(nombre, tabla_comisiones)
+            if comision_simil:
+                comision_por_unidad = comision_simil
+        
+        # ESTRATEGIA 4: Buscar por palabras clave
+        if comision_por_unidad is None and nombre:
+            comision_palabra = buscar_comision_por_palabras_clave(nombre, palabras_clave)
+            if comision_palabra:
+                comision_por_unidad = comision_palabra
+        
+        # Si se encontró una comisión, calcular el total
+        if comision_por_unidad is not None:
+            return float(cantidad) * comision_por_unidad
+        
+        # No se encontró comisión
         return 0.0
         
     except Exception as e:
-        st.warning(f"Error calculando comisión para fila: {e}")
+        st.warning(f"Error calculando comisión: {e}")
         return 0.0
 
 def validar_datos(df):
@@ -198,6 +269,155 @@ def exportar_reporte(df, nombre_archivo="reporte_comisiones.xlsx"):
         resumen_producto.to_excel(writer, sheet_name='Top Productos')
     
     return output.getvalue()
+
+def mostrar_productos_sin_comision(df, tabla_comisiones, palabras_clave):
+    """
+    Identifica y muestra productos que no tienen comisión asignada
+    """
+    productos_unicos = df['Descripcion'].unique()
+    productos_sin_comision = []
+    
+    for producto in productos_unicos:
+        nombre_norm = normalizar_texto(producto)
+        tiene_comision = False
+        
+        # Verificar si tiene comisión por algún método
+        if nombre_norm in tabla_comisiones:
+            tiene_comision = True
+        else:
+            # Buscar por similitud
+            if buscar_comision_por_similitud(nombre_norm, tabla_comisiones):
+                tiene_comision = True
+            # Buscar por palabras clave
+            elif buscar_comision_por_palabras_clave(nombre_norm, palabras_clave):
+                tiene_comision = True
+        
+        if not tiene_comision:
+            productos_sin_comision.append(producto)
+    
+    return productos_sin_comision
+
+def interfaz_gestion_comisiones(df_base):
+    """Interfaz para gestionar comisiones fácilmente"""
+    with st.expander("⚙️ Gestión de Comisiones", expanded=False):
+        st.subheader("➕ Agregar Nueva Comisión")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            nuevo_producto = st.text_input(
+                "Nombre del producto (como aparece en Excel):",
+                placeholder="Ej: BIDON 20 LT COMB GAS"
+            )
+        
+        with col2:
+            nueva_comision = st.number_input(
+                "Comisión por unidad ($):",
+                min_value=0.0,
+                step=100.0,
+                format="%.2f"
+            )
+        
+        if st.button("➕ Agregar Comisión", use_container_width=True):
+            if nuevo_producto and nueva_comision > 0:
+                nombre_normalizado = normalizar_texto(nuevo_producto)
+                TABLA_COMISIONES[nombre_normalizado] = nueva_comision
+                st.success(f"✅ Comisión agregada: {nombre_normalizado} = ${nueva_comision:,.2f}")
+                st.rerun()
+            else:
+                st.error("❌ Por favor completa todos los campos")
+        
+        st.divider()
+        
+        st.subheader("📋 Comisiones Configuradas")
+        
+        # Mostrar tabla de comisiones
+        df_comisiones = pd.DataFrame([
+            {'Producto/Código': k, 'Comisión por Unidad': f"${v:,.2f}"}
+            for k, v in TABLA_COMISIONES.items()
+        ])
+        st.dataframe(df_comisiones, use_container_width=True, height=300)
+        
+        st.divider()
+        
+        st.subheader("🔍 Diagnosticar Productos Sin Comisión")
+        if st.button("🔎 Identificar Productos Sin Comisión"):
+            if df_base is not None:
+                productos_sin = mostrar_productos_sin_comision(
+                    df_base, 
+                    TABLA_COMISIONES,
+                    PALABRAS_CLAVE_COMISIONES
+                )
+                
+                if productos_sin:
+                    st.warning(f"⚠️ Se encontraron {len(productos_sin)} productos sin comisión:")
+                    for prod in productos_sin[:20]:  # Mostrar máximo 20
+                        st.code(f"• {prod}")
+                    
+                    if len(productos_sin) > 20:
+                        st.info(f"... y {len(productos_sin) - 20} productos más")
+                    
+                    st.info("💡 Sugerencia: Usa el formulario de arriba para agregar comisiones a estos productos")
+                else:
+                    st.success("✅ Todos los productos tienen comisión asignada")
+            else:
+                st.error("❌ Primero carga los archivos de ventas")
+
+def debug_nombres_productos(df):
+    """Muestra los nombres reales de productos para depuración"""
+    with st.expander("🔧 Debug: Ver Nombres Reales de Productos", expanded=False):
+        st.subheader("Nombres de productos en tu Excel")
+        
+        # Mostrar productos únicos
+        productos_unicos = df['Descripcion'].unique()
+        
+        # Crear DataFrame para mostrar
+        df_productos = pd.DataFrame({
+            'Nombre en Excel': productos_unicos,
+            'Nombre Normalizado': [normalizar_texto(p) for p in productos_unicos],
+            'Tiene Comisión': [
+                '✅' if (normalizar_texto(p) in TABLA_COMISIONES 
+                        or buscar_comision_por_similitud(normalizar_texto(p), TABLA_COMISIONES)
+                        or buscar_comision_por_palabras_clave(normalizar_texto(p), PALABRAS_CLAVE_COMISIONES))
+                else '❌' 
+                for p in productos_unicos
+            ]
+        })
+        
+        st.dataframe(df_productos, use_container_width=True, height=400)
+        
+        # Buscar específicamente el producto "bidon"
+        st.subheader("🔍 Buscar productos que contengan 'BIDON'")
+        productos_bidon = [p for p in productos_unicos if 'BIDON' in normalizar_texto(p)]
+        
+        if productos_bidon:
+            for prod in productos_bidon:
+                st.write(f"• **{prod}**")
+                st.write(f"  Normalizado: {normalizar_texto(prod)}")
+                
+                # Verificar si tiene comisión
+                nombre_norm = normalizar_texto(prod)
+                if nombre_norm in TABLA_COMISIONES:
+                    comision = TABLA_COMISIONES[nombre_norm]
+                    st.write(f"  ✅ Comisión asignada: ${comision:,.2f}")
+                else:
+                    # Buscar por similitud
+                    comision_simil = buscar_comision_por_similitud(nombre_norm, TABLA_COMISIONES)
+                    if comision_simil:
+                        st.write(f"  ✅ Comisión por similitud: ${comision_simil:,.2f}")
+                    else:
+                        # Buscar por palabras clave
+                        comision_palabra = buscar_comision_por_palabras_clave(nombre_norm, PALABRAS_CLAVE_COMISIONES)
+                        if comision_palabra:
+                            st.write(f"  ✅ Comisión por palabra clave: ${comision_palabra:,.2f}")
+                        else:
+                            st.write(f"  ❌ Sin comisión asignada")
+                st.write("---")
+        else:
+            st.warning("No se encontraron productos con 'BIDON' en el nombre")
+            st.info("Los productos disponibles son:")
+            for prod in productos_unicos[:10]:
+                st.write(f"• {prod}")
 
 # =========================================================
 # 3. CARGA DE DATOS MEJORADA
@@ -333,6 +553,12 @@ if archivos_subidos:
         else:
             df_base['Producto_Info'] = df_base['Descripcion']
         
+        # Mostrar interfaz de gestión de comisiones
+        interfaz_gestion_comisiones(df_base)
+        
+        # Mostrar debug de nombres
+        debug_nombres_productos(df_base)
+        
         # Panel de filtros
         with st.expander("🔍 Panel de Filtros Avanzados", expanded=True):
             f1, f2, f3, f4 = st.columns(4)
@@ -403,7 +629,7 @@ if archivos_subidos:
             # Calcular comisiones con función mejorada
             with st.spinner('💰 Calculando comisiones...'):
                 df_filtrado['Pago_Comision'] = df_filtrado.apply(
-                    lambda row: calcular_comision_segura(row, TABLA_COMISIONES), 
+                    lambda row: calcular_comision_segura(row, TABLA_COMISIONES, PALABRAS_CLAVE_COMISIONES), 
                     axis=1
                 )
             
@@ -435,6 +661,25 @@ if archivos_subidos:
                     'Volumen': '{:,.1f}',
                     '% Comisión': '{:.2f}%'
                 }), use_container_width=True)
+            
+            # Resumen de comisiones por producto
+            with st.expander("📊 Resumen de Comisiones por Producto"):
+                resumen_comisiones = df_filtrado.groupby('Descripcion').agg({
+                    'Cantidad': 'sum',
+                    'Pago_Comision': 'sum',
+                    'Valor': 'sum'
+                }).round(2)
+                resumen_comisiones = resumen_comisiones[resumen_comisiones['Pago_Comision'] > 0]
+                resumen_comisiones = resumen_comisiones.sort_values('Pago_Comision', ascending=False)
+                
+                if not resumen_comisiones.empty:
+                    st.dataframe(resumen_comisiones.style.format({
+                        'Cantidad': '{:,.1f}',
+                        'Pago_Comision': '${:,.0f}',
+                        'Valor': '${:,.0f}'
+                    }), use_container_width=True)
+                else:
+                    st.warning("⚠️ No se encontraron comisiones calculadas para ningún producto")
             
             # Detalle de transacciones
             with st.expander("📋 Ver detalle de todas las transacciones"):
@@ -511,6 +756,8 @@ else:
         - ✅ Gráficos interactivos
         - ✅ Exportación a Excel
         - ✅ Manejo robusto de errores
+        - ✅ Detección flexible de productos
+        - ✅ Gestión de comisiones integrada
         """)
 
 # =========================================================
