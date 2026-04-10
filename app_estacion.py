@@ -4,11 +4,13 @@ import plotly.express as px
 import io
 
 # =========================================================
-# 1. CONFIGURACIÓN DE COMISIONES
+# 1. CONFIGURACIÓN DE COMISIONES (CÓDIGOS O NOMBRES)
 # =========================================================
+# Ahora puedes mezclar: poner el código numérico o el nombre en mayúsculas
 TABLA_COMISIONES = {
-    'GASOLINA 93': 5.0,
-    'GASOLINA 95': 8.0,
+    '101': 5.0,         # Ejemplo: Código para Gasolina 93
+    '102': 8.0,         # Ejemplo: Código para Gasolina 95
+    '1050': 15.0,       # Código del Limpiaparabrisas
     'GASOLINA 97': 10.0,
     'DIESEL': 4.0,
     'KEROSENE': 6.0,
@@ -21,7 +23,6 @@ TABLA_COMISIONES = {
 # =========================================================
 st.set_page_config(page_title="Estación Pro - Reportes", layout="wide", page_icon="⛽")
 
-# Estilo CSS para mejorar la apariencia
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -32,9 +33,8 @@ st.markdown("""
 st.title("⛽ Sistema de Gestión de Ventas - Estación Pro")
 
 # =========================================================
-# 3. CARGA DE DATOS (NUEVO: BOTÓN DE SUBIDA)
+# 3. CARGA DE DATOS
 # =========================================================
-# Este cuadro aparecerá ahora en el centro de tu pantalla
 archivos_subidos = st.file_uploader(
     "📂 Selecciona tus archivos Excel 'Ventas_*.xlsx'", 
     type=['xlsx'], 
@@ -43,27 +43,32 @@ archivos_subidos = st.file_uploader(
 
 @st.cache_data
 def procesar_archivos(lista_archivos):
-    columnas = ['Fecha', 'Hora', 'Descripcion', 'Cantidad', 'Valor', 'Nombre Cajero', 'MOP1']
+    # Agregamos 'cod Producto' a la lista de columnas a extraer
+    columnas_posibles = ['Fecha', 'Hora', 'cod Producto', 'Descripcion', 'Cantidad', 'Valor', 'Nombre Cajero', 'MOP1']
     lista_df = []
+    
     for arc in lista_archivos:
         try:
-            # Leer el archivo directamente de la memoria (subida web)
             df = pd.read_excel(arc, skiprows=7)
-            # Seleccionar solo las columnas necesarias
-            df_sel = df[columnas].copy()
-            # Convertir fecha y limpiar filas vacías
+            # Limpiar nombres de columnas por si traen espacios
+            df.columns = [str(c).strip() for c in df.columns]
+            
+            # Verificar qué columnas de las que queremos existen realmente en este Excel
+            cols_presentes = [c for c in columnas_posibles if c in df.columns]
+            df_sel = df[cols_presentes].copy()
+            
+            # Convertir fecha y limpiar
             df_sel['Fecha'] = pd.to_datetime(df_sel['Fecha'], dayfirst=True, errors='coerce')
             df_sel = df_sel.dropna(subset=['Fecha'])
             lista_df.append(df_sel)
         except Exception as e:
-            st.warning(f"No se pudo procesar un archivo: {arc.name}")
+            st.warning(f"No se pudo procesar el archivo {arc.name}: {e}")
             continue
     
     if lista_df:
         return pd.concat(lista_df, ignore_index=True)
     return None
 
-# Ejecutar la carga solo si hay archivos
 df_base = None
 if archivos_subidos:
     df_base = procesar_archivos(archivos_subidos)
@@ -72,21 +77,32 @@ if archivos_subidos:
 # 4. CUERPO PRINCIPAL Y FILTROS
 # =========================================================
 if df_base is not None:
+    # --- PROCESAMIENTO DE IDENTIDAD (CÓDIGO + NOMBRE) ---
+    if 'cod Producto' in df_base.columns:
+        df_base['cod Producto'] = df_base['cod Producto'].astype(str).str.strip()
+    
+    df_base['Descripcion'] = df_base['Descripcion'].astype(str).str.strip()
+    
+    # Creamos la info combinada para los filtros y tablas
+    if 'cod Producto' in df_base.columns:
+        df_base['Producto_Info'] = df_base['cod Producto'] + " - " + df_base['Descripcion']
+    else:
+        df_base['Producto_Info'] = df_base['Descripcion']
+
     # --- PANEL DE FILTROS ---
     with st.expander("🔍 Panel de Filtros Avanzados", expanded=True):
         f1, f2, f3, f4 = st.columns(4)
         
         with f1:
-            min_f, max_f = df_base['Fecha'].min(), df_base['Fecha'].max()
-            rango = st.date_input("Periodo:", [min_f, max_f])
+            rango = st.date_input("Periodo:", [df_base['Fecha'].min(), df_base['Fecha'].max()])
             
         with f2:
             vendedores = st.multiselect("Vendedor:", df_base['Nombre Cajero'].unique(), 
                                         default=df_base['Nombre Cajero'].unique())
             
         with f3:
-            productos_sel = st.multiselect("Producto:", df_base['Descripcion'].unique(), 
-                                          default=df_base['Descripcion'].unique())
+            productos_sel = st.multiselect("Producto (Cód - Desc):", df_base['Producto_Info'].unique(), 
+                                          default=df_base['Producto_Info'].unique())
             
         with f4:
             medios = st.multiselect("Pago:", df_base['MOP1'].unique(), 
@@ -95,17 +111,23 @@ if df_base is not None:
     # Aplicar Filtros
     mask = (df_base['Nombre Cajero'].isin(vendedores)) & \
            (df_base['MOP1'].isin(medios)) & \
-           (df_base['Descripcion'].isin(productos_sel))
+           (df_base['Producto_Info'].isin(productos_sel))
     
     if len(rango) == 2:
         mask &= (df_base['Fecha'] >= pd.Timestamp(rango[0])) & (df_base['Fecha'] <= pd.Timestamp(rango[1]))
     
     df_filtrado = df_base.loc[mask].copy()
 
-    # Cálculo de Comisión
-    df_filtrado['Pago_Comision'] = df_filtrado.apply(
-        lambda x: x['Cantidad'] * TABLA_COMISIONES.get(str(x['Descripcion']).upper(), 0), axis=1
-    )
+    # --- CÁLCULO DE COMISIÓN INTELIGENTE ---
+    def calcular_comision(fila):
+        # 1. Intentar por código primero (si existe)
+        if 'cod Producto' in fila and fila['cod Producto'] in TABLA_COMISIONES:
+            return fila['Cantidad'] * TABLA_COMISIONES[fila['cod Producto']]
+        # 2. Si no, intentar por nombre en mayúsculas
+        nombre = str(fila['Descripcion']).upper()
+        return fila['Cantidad'] * TABLA_COMISIONES.get(nombre, 0)
+
+    df_filtrado['Pago_Comision'] = df_filtrado.apply(calcular_comision, axis=1)
 
     # --- MÉTRICAS PRINCIPALES ---
     st.divider()
@@ -123,7 +145,7 @@ if df_base is not None:
         resumen = df_filtrado.groupby('Nombre Cajero')['Pago_Comision'].sum().reset_index()
         resumen.columns = ['Cajero', 'Total Comisiones']
         st.dataframe(resumen.style.format({'Total Comisiones': '$ {:,.0f}'}), 
-                     use_container_width=True)
+                      use_container_width=True)
 
     with col_der:
         st.subheader("📈 Flujo de Ventas por Hora")
@@ -134,7 +156,8 @@ if df_base is not None:
         st.plotly_chart(fig_h, use_container_width=True)
 
     with st.expander("📋 Ver detalle de todas las transacciones"):
-        st.write(df_filtrado)
+        # Mostramos la columna combinada para que veas códigos y nombres juntos
+        st.write(df_filtrado[['Fecha', 'Hora', 'Nombre Cajero', 'Producto_Info', 'Cantidad', 'Valor', 'Pago_Comision']])
 
 else:
-    st.info("👋 Por favor, selecciona tus archivos Excel 'Ventas_*.xlsx' en el cuadro de arriba para comenzar el análisis.")
+    st.info("👋 Por favor, selecciona tus archivos Excel 'Ventas_*.xlsx' para comenzar.")
