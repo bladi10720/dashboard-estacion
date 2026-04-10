@@ -17,12 +17,9 @@ ARCHIVO_COMISIONES = "comisiones_guardadas.json"
 def cargar_comisiones():
     """Carga las comisiones desde un archivo JSON"""
     comisiones_por_defecto = {
-        # Códigos
         '966879': 1000.0,
         '102': 8.0,
         '1050': 15.0,
-        
-        # Nombres exactos
         'GASOLINA 97': 10.0,
         'DIESEL': 4.0,
         'KEROSENE': 6.0,
@@ -32,8 +29,6 @@ def cargar_comisiones():
         'PETROLEO DIESEL G-B': 100.0,
         'GASOLINA 93': 1000.0,
         'GASOLINA 95': 8.0,
-        
-        # Bidón 20 litros
         'BIDON 20 LT COMB GAS': 5000.0,
         'BIDON 20L COMB GAS': 5000.0,
         'BIDON 20 LT': 5000.0,
@@ -46,7 +41,6 @@ def cargar_comisiones():
         try:
             with open(ARCHIVO_COMISIONES, 'r', encoding='utf-8') as f:
                 comisiones_guardadas = json.load(f)
-                # Combinar comisiones por defecto con las guardadas
                 comisiones_por_defecto.update(comisiones_guardadas)
         except:
             pass
@@ -112,43 +106,49 @@ def buscar_comision_por_palabras_clave(nombre_producto, palabras_clave):
     return None
 
 def calcular_comision_segura(fila, tabla_comisiones, palabras_clave):
-    """Calcula comisión con múltiples estrategias"""
+    """
+    Versión mejorada con múltiples estrategias de búsqueda
+    """
     try:
         cantidad = fila.get('Cantidad', 0)
         if pd.isna(cantidad) or cantidad <= 0:
             return 0.0
         
+        # Obtener código y nombre del producto
         codigo = normalizar_texto(fila.get('cod Producto', ''))
         nombre = normalizar_texto(fila.get('Descripcion', ''))
         
         comision_por_unidad = None
         
-        # Estrategia 1: Por código
+        # ESTRATEGIA 1: Buscar por código
         if codigo and codigo in tabla_comisiones:
             comision_por_unidad = tabla_comisiones[codigo]
         
-        # Estrategia 2: Por nombre exacto
+        # ESTRATEGIA 2: Buscar por nombre exacto
         elif nombre and nombre in tabla_comisiones:
             comision_por_unidad = tabla_comisiones[nombre]
         
-        # Estrategia 3: Por similitud
+        # ESTRATEGIA 3: Buscar por similitud (fuzzy matching)
         elif nombre:
             comision_simil = buscar_comision_por_similitud(nombre, tabla_comisiones)
             if comision_simil:
                 comision_por_unidad = comision_simil
         
-        # Estrategia 4: Por palabras clave
+        # ESTRATEGIA 4: Buscar por palabras clave
         if comision_por_unidad is None and nombre:
             comision_palabra = buscar_comision_por_palabras_clave(nombre, palabras_clave)
             if comision_palabra:
                 comision_por_unidad = comision_palabra
         
+        # Si se encontró una comisión, calcular el total
         if comision_por_unidad is not None:
             return float(cantidad) * comision_por_unidad
         
+        # No se encontró comisión
         return 0.0
         
     except Exception as e:
+        st.warning(f"Error calculando comisión: {e}")
         return 0.0
 
 def validar_datos(df):
@@ -157,10 +157,23 @@ def validar_datos(df):
         return False, "No hay datos para procesar"
     
     problemas = []
+    
+    # Verificar columnas críticas
     columnas_requeridas = ['Fecha', 'Cantidad', 'Valor']
     for col in columnas_requeridas:
         if col not in df.columns:
             problemas.append(f"Falta columna: {col}")
+    
+    # Verificar valores nulos
+    for col in ['Nombre Cajero', 'Descripcion']:
+        if col in df.columns and df[col].isna().all():
+            problemas.append(f"Todos los valores de '{col}' son nulos")
+    
+    # Verificar fechas inválidas
+    if 'Fecha' in df.columns:
+        fechas_invalidas = df['Fecha'].isna().sum()
+        if fechas_invalidas > 0:
+            problemas.append(f"{fechas_invalidas} fechas inválidas encontradas")
     
     if problemas:
         return False, "; ".join(problemas)
@@ -240,45 +253,38 @@ def crear_graficos(df_filtrado):
         else:
             st.info("No hay datos suficientes para mostrar el gráfico")
 
-def exportar_reporte(df):
+def exportar_reporte(df, nombre_archivo="reporte_comisiones.xlsx"):
     """Exporta el reporte a Excel con múltiples hojas"""
     output = io.BytesIO()
     
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         # Hoja 1: Detalle
-        columnas_detalle = ['Fecha', 'Hora', 'Nombre Cajero', 'Descripcion', 'Cantidad', 'Valor', 'Pago_Comision']
-        columnas_existentes = [col for col in columnas_detalle if col in df.columns]
-        df_detalle = df[columnas_existentes].copy()
+        df_detalle = df[['Fecha', 'Hora', 'Nombre Cajero', 'Descripcion', 'Cantidad', 'Valor', 'Pago_Comision']].copy()
         df_detalle.to_excel(writer, sheet_name='Detalle Ventas', index=False)
         
         # Hoja 2: Resumen por Cajero
-        if 'Nombre Cajero' in df.columns:
-            resumen_cajero = df.groupby('Nombre Cajero').agg({
-                'Valor': 'sum',
-                'Pago_Comision': 'sum',
-                'Cantidad': 'sum'
-            }).round(2)
-            resumen_cajero.columns = ['Total Ventas', 'Total Comisiones', 'Volumen']
-            if 'Total Ventas' in resumen_cajero.columns:
-                resumen_cajero['% Comisión'] = (resumen_cajero['Total Comisiones'] / resumen_cajero['Total Ventas'] * 100).round(2)
-            resumen_cajero.to_excel(writer, sheet_name='Resumen por Cajero')
+        resumen_cajero = df.groupby('Nombre Cajero').agg({
+            'Valor': 'sum',
+            'Pago_Comision': 'sum',
+            'Cantidad': 'sum'
+        }).round(2)
+        resumen_cajero.columns = ['Total Ventas', 'Total Comisiones', 'Volumen']
+        resumen_cajero['% Comisión'] = (resumen_cajero['Total Comisiones'] / resumen_cajero['Total Ventas'] * 100).round(2)
+        resumen_cajero.to_excel(writer, sheet_name='Resumen por Cajero')
         
         # Hoja 3: Resumen por Producto
-        if 'Descripcion' in df.columns:
-            resumen_producto = df.groupby('Descripcion').agg({
-                'Valor': 'sum',
-                'Cantidad': 'sum'
-            }).nlargest(20, 'Valor')
-            resumen_producto.columns = ['Total Ventas', 'Volumen']
-            resumen_producto.to_excel(writer, sheet_name='Top Productos')
+        resumen_producto = df.groupby('Descripcion').agg({
+            'Valor': 'sum',
+            'Cantidad': 'sum'
+        }).nlargest(20, 'Valor')
+        resumen_producto.columns = ['Total Ventas', 'Volumen']
+        resumen_producto.to_excel(writer, sheet_name='Top Productos')
     
     return output.getvalue()
-
 def mostrar_productos_sin_comision(df, tabla_comisiones, palabras_clave):
-    """Identifica productos sin comisión"""
-    if 'Descripcion' not in df.columns:
-        return []
-    
+    """
+    Identifica y muestra productos que no tienen comisión asignada
+    """
     productos_unicos = df['Descripcion'].unique()
     productos_sin_comision = []
     
@@ -286,12 +292,16 @@ def mostrar_productos_sin_comision(df, tabla_comisiones, palabras_clave):
         nombre_norm = normalizar_texto(producto)
         tiene_comision = False
         
+        # Verificar si tiene comisión por algún método
         if nombre_norm in tabla_comisiones:
             tiene_comision = True
-        elif buscar_comision_por_similitud(nombre_norm, tabla_comisiones):
-            tiene_comision = True
-        elif buscar_comision_por_palabras_clave(nombre_norm, palabras_clave):
-            tiene_comision = True
+        else:
+            # Buscar por similitud
+            if buscar_comision_por_similitud(nombre_norm, tabla_comisiones):
+                tiene_comision = True
+            # Buscar por palabras clave
+            elif buscar_comision_por_palabras_clave(nombre_norm, palabras_clave):
+                tiene_comision = True
         
         if not tiene_comision:
             productos_sin_comision.append(producto)
@@ -299,7 +309,7 @@ def mostrar_productos_sin_comision(df, tabla_comisiones, palabras_clave):
     return productos_sin_comision
 
 def interfaz_gestion_comisiones(df_base):
-    """Interfaz para gestionar comisiones con guardado persistente"""
+    """Interfaz para gestionar comisiones fácilmente"""
     with st.expander("⚙️ Gestión de Comisiones", expanded=False):
         st.subheader("➕ Agregar Nueva Comisión")
         
@@ -308,8 +318,7 @@ def interfaz_gestion_comisiones(df_base):
         with col1:
             nuevo_producto = st.text_input(
                 "Nombre del producto (como aparece en Excel):",
-                placeholder="Ej: BIDON 20 LT COMB GAS",
-                key="nuevo_producto_input"
+                placeholder="Ej: BIDON 20 LT COMB GAS"
             )
         
         with col2:
@@ -317,21 +326,16 @@ def interfaz_gestion_comisiones(df_base):
                 "Comisión por unidad ($):",
                 min_value=0.0,
                 step=100.0,
-                format="%.2f",
-                key="nueva_comision_input"
+                format="%.2f"
             )
         
-        if st.button("💾 Guardar Comisión", use_container_width=True):
+        if st.button("➕ Agregar Comisión", use_container_width=True):
             if nuevo_producto and nueva_comision > 0:
                 nombre_normalizado = normalizar_texto(nuevo_producto)
                 st.session_state.TABLA_COMISIONES[nombre_normalizado] = nueva_comision
-                
-                # Guardar en archivo
-                if guardar_comisiones(st.session_state.TABLA_COMISIONES):
-                    st.success(f"✅ Comisión guardada: {nombre_normalizado} = ${nueva_comision:,.2f}")
-                    st.rerun()
-                else:
-                    st.error("❌ Error al guardar la comisión")
+                guardar_comisiones(st.session_state.TABLA_COMISIONES)
+                st.success(f"✅ Comisión agregada: {nombre_normalizado} = ${nueva_comision:,.2f}")
+                st.rerun()
             else:
                 st.error("❌ Por favor completa todos los campos")
         
@@ -341,8 +345,7 @@ def interfaz_gestion_comisiones(df_base):
         if len(st.session_state.TABLA_COMISIONES) > 0:
             comision_a_eliminar = st.selectbox(
                 "Selecciona comisión para eliminar:",
-                options=list(st.session_state.TABLA_COMISIONES.keys()),
-                key="eliminar_comision_select"
+                options=list(st.session_state.TABLA_COMISIONES.keys())
             )
             
             if st.button("❌ Eliminar Comisión", use_container_width=True):
@@ -379,7 +382,7 @@ def interfaz_gestion_comisiones(df_base):
                 
                 if productos_sin:
                     st.warning(f"⚠️ Se encontraron {len(productos_sin)} productos sin comisión:")
-                    for prod in productos_sin[:20]:  # Mostrar máximo 20
+                    for prod in productos_sin[:20]:
                         st.code(f"• {prod}")
                     
                     if len(productos_sin) > 20:
@@ -408,9 +411,9 @@ def debug_nombres_productos(df):
             'Nombre en Excel': productos_unicos,
             'Nombre Normalizado': [normalizar_texto(p) for p in productos_unicos],
             'Tiene Comisión': [
-                '✅' if (normalizar_texto(p) in st.session_state.TABLA_COMISIONES or 
-                        buscar_comision_por_similitud(normalizar_texto(p), st.session_state.TABLA_COMISIONES) or
-                        buscar_comision_por_palabras_clave(normalizar_texto(p), PALABRAS_CLAVE_COMISIONES))
+                '✅' if (normalizar_texto(p) in st.session_state.TABLA_COMISIONES 
+                        or buscar_comision_por_similitud(normalizar_texto(p), st.session_state.TABLA_COMISIONES)
+                        or buscar_comision_por_palabras_clave(normalizar_texto(p), PALABRAS_CLAVE_COMISIONES))
                 else '❌' 
                 for p in productos_unicos
             ]
@@ -420,7 +423,7 @@ def debug_nombres_productos(df):
         
         # Buscar específicamente productos
         st.subheader("🔍 Buscar productos que contengan texto específico")
-        texto_buscar = st.text_input("Buscar:", placeholder="Ej: BIDON, GASOLINA, ACEITE", key="debug_buscar")
+        texto_buscar = st.text_input("Buscar:", placeholder="Ej: BIDON, GASOLINA, ACEITE")
         if texto_buscar:
             productos_encontrados = [p for p in productos_unicos if texto_buscar.upper() in normalizar_texto(p)]
             if productos_encontrados:
@@ -429,18 +432,28 @@ def debug_nombres_productos(df):
                     st.write(f"• **{prod}**")
                     st.write(f"  Normalizado: {nombre_norm}")
                     
-                    # Verificar comisión
+                    # Verificar si tiene comisión
                     if nombre_norm in st.session_state.TABLA_COMISIONES:
-                        st.write(f"  ✅ Comisión: ${st.session_state.TABLA_COMISIONES[nombre_norm]:,.2f}")
+                        comision = st.session_state.TABLA_COMISIONES[nombre_norm]
+                        st.write(f"  ✅ Comisión asignada: ${comision:,.2f}")
                     else:
+                        # Buscar por similitud
                         comision_simil = buscar_comision_por_similitud(nombre_norm, st.session_state.TABLA_COMISIONES)
                         if comision_simil:
                             st.write(f"  ✅ Comisión por similitud: ${comision_simil:,.2f}")
                         else:
-                            st.write(f"  ❌ Sin comisión")
+                            # Buscar por palabras clave
+                            comision_palabra = buscar_comision_por_palabras_clave(nombre_norm, PALABRAS_CLAVE_COMISIONES)
+                            if comision_palabra:
+                                st.write(f"  ✅ Comisión por palabra clave: ${comision_palabra:,.2f}")
+                            else:
+                                st.write(f"  ❌ Sin comisión asignada")
                     st.write("---")
             else:
                 st.warning(f"No se encontraron productos con '{texto_buscar}'")
+                st.info("Los productos disponibles son:")
+                for prod in productos_unicos[:10]:
+                    st.write(f"• {prod}")
 
 # =========================================================
 # 3. CARGA DE DATOS MEJORADA
@@ -514,7 +527,6 @@ def procesar_archivos(lista_archivos):
         return df_final, errores
     
     return None, errores
-
 # =========================================================
 # 4. CONFIGURACIÓN DE LA PÁGINA
 # =========================================================
@@ -566,7 +578,7 @@ if archivos_subidos:
                     st.metric("Rango de Fechas", 
                              f"{df_base['Fecha'].min().strftime('%d/%m/%Y')} - {df_base['Fecha'].max().strftime('%d/%m/%Y')}")
         
-        # Procesar datos para mostrar
+        # Procesar datos
         if 'cod Producto' in df_base.columns:
             df_base['cod Producto'] = df_base['cod Producto'].astype(str).str.strip()
         
@@ -597,8 +609,7 @@ if archivos_subidos:
                         "📅 Periodo:", 
                         [fecha_min, fecha_max],
                         min_value=fecha_min,
-                        max_value=fecha_max,
-                        key="filtro_fecha"
+                        max_value=fecha_max
                     )
                 else:
                     rango = []
@@ -611,8 +622,7 @@ if archivos_subidos:
                         "👤 Vendedor:", 
                         vendedores_opciones,
                         default=vendedores_opciones,
-                        help="Selecciona uno o más vendedores",
-                        key="filtro_vendedor"
+                        help="Selecciona uno o más vendedores"
                     )
                 else:
                     vendedores = []
@@ -625,8 +635,7 @@ if archivos_subidos:
                         "🛒 Producto (Código - Descripción):", 
                         productos_opciones,
                         default=productos_opciones,
-                        help="Selecciona uno o más productos",
-                        key="filtro_producto"
+                        help="Selecciona uno o más productos"
                     )
                 else:
                     productos_sel = []
@@ -634,7 +643,6 @@ if archivos_subidos:
             
             with f4:
                 if 'MOP1' in df_base.columns:
-                    # Limpiar datos nulos de MOP1
                     mop1_clean = df_base['MOP1'].dropna()
                     if len(mop1_clean) > 0:
                         medios_opciones = sorted(mop1_clean.unique())
@@ -642,8 +650,7 @@ if archivos_subidos:
                             "💳 Método de Pago:", 
                             medios_opciones,
                             default=medios_opciones,
-                            help="Selecciona uno o más métodos de pago",
-                            key="filtro_medio"
+                            help="Selecciona uno o más métodos de pago"
                         )
                     else:
                         medios = []
@@ -655,27 +662,21 @@ if archivos_subidos:
         # =========================================================
         # APLICAR FILTROS
         # =========================================================
-        # Inicializar máscara con todos True
         mask = pd.Series([True] * len(df_base))
         
-        # Aplicar filtro de fecha
         if len(rango) == 2 and 'Fecha' in df_base.columns:
             mask &= (df_base['Fecha'] >= pd.Timestamp(rango[0])) & \
                     (df_base['Fecha'] <= pd.Timestamp(rango[1]))
         
-        # Aplicar filtro de vendedores
         if vendedores and 'Nombre Cajero' in df_base.columns:
             mask &= df_base['Nombre Cajero'].isin(vendedores)
         
-        # Aplicar filtro de productos
         if productos_sel and 'Producto_Info' in df_base.columns:
             mask &= df_base['Producto_Info'].isin(productos_sel)
         
-        # Aplicar filtro de métodos de pago
         if medios and 'MOP1' in df_base.columns:
             mask &= df_base['MOP1'].isin(medios)
         
-        # Aplicar máscara
         df_filtrado = df_base.loc[mask].copy()
         
         # =========================================================
@@ -699,7 +700,7 @@ if archivos_subidos:
             st.success(f"✅ Mostrando {len(df_filtrado):,} registros")
             st.markdown("---")
             
-            # Mostrar métricas principales
+            # Mostrar métricas
             mostrar_metricas(df_filtrado)
             
             st.markdown("---")
@@ -788,7 +789,6 @@ if archivos_subidos:
     else:
         st.error("❌ No se pudieron procesar los archivos. Verifica el formato de los archivos Excel.")
         
-        # Mostrar ayuda
         with st.expander("🆘 ¿Necesitas ayuda?"):
             st.markdown("""
             **Formato esperado del archivo Excel:**
@@ -802,17 +802,11 @@ if archivos_subidos:
             - Opcionalmente puede incluir:
                 - `cod Producto` (código del producto)
                 - `MOP1` (método de pago)
-            
-            **Consejos:**
-            1. Asegúrate de que los archivos no estén corruptos
-            2. Verifica que las columnas tengan los nombres exactos
-            3. Prueba con un solo archivo primero
             """)
 
 else:
     st.info("👋 **Bienvenido al Sistema de Gestión de Ventas**\n\nPor favor, selecciona tus archivos Excel 'Ventas_*.xlsx' para comenzar a analizar tus datos.")
     
-    # Mostrar ejemplo
     with st.expander("📖 Ver ejemplo de uso"):
         st.markdown("""
         ### ¿Cómo usar esta aplicación?
@@ -822,17 +816,6 @@ else:
         3. **Aplica filtros** para analizar periodos específicos, vendedores o productos
         4. **Visualiza métricas** y gráficos automáticos
         5. **Exporta reportes** a Excel con un solo clic
-        
-        ### Características:
-        - ✅ Soporte para múltiples archivos
-        - ✅ Cálculo automático de comisiones
-        - ✅ Filtros dinámicos (fecha, vendedor, producto, método de pago)
-        - ✅ Gráficos interactivos
-        - ✅ Exportación a Excel
-        - ✅ Manejo robusto de errores
-        - ✅ Detección flexible de productos
-        - ✅ Gestión de comisiones integrada (guardado persistente)
-        - ✅ Diagnóstico de productos sin comisión
         """)
 
 # =========================================================
