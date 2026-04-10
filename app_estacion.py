@@ -5,6 +5,7 @@ import io
 import re
 import json
 import os
+import glob          # ← Agrega ESTA línea
 from datetime import datetime
 from difflib import get_close_matches
 
@@ -59,6 +60,11 @@ def guardar_comisiones(comisiones):
 
 # Cargar comisiones al iniciar
 if 'TABLA_COMISIONES' not in st.session_state:
+    # Variables para controlar la carga automática
+if 'datos_cargados' not in st.session_state:
+    st.session_state.datos_cargados = None
+if 'tipo_carga' not in st.session_state:
+    st.session_state.tipo_carga = None
     st.session_state.TABLA_COMISIONES = cargar_comisiones()
 
 # Palabras clave para búsqueda flexible
@@ -527,6 +533,44 @@ def procesar_archivos(lista_archivos):
         return df_final, errores
     
     return None, errores
+def cargar_archivos_desde_carpeta():
+    """Carga automáticamente todos los Excel de la carpeta 'datos/'"""
+    
+    carpeta_datos = "datos"
+    archivos_encontrados = []
+    
+    # Buscar archivos Excel en la carpeta datos/
+    if os.path.exists(carpeta_datos):
+        archivos_encontrados = glob.glob(f"{carpeta_datos}/*.xlsx")
+        archivos_encontrados.extend(glob.glob(f"{carpeta_datos}/*.xls"))
+    
+    if not archivos_encontrados:
+        return None
+    
+    lista_df = []
+    
+    for archivo in archivos_encontrados:
+        try:
+            df = pd.read_excel(archivo, skiprows=7)
+            df.columns = [str(c).strip() for c in df.columns]
+            
+            if 'Fecha' in df.columns:
+                df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+                df = df.dropna(subset=['Fecha'])
+            
+            for col in ['Cantidad', 'Valor']:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            
+            lista_df.append(df)
+            st.success(f"✅ Cargado: {os.path.basename(archivo)}")
+            
+        except Exception as e:
+            st.warning(f"Error en {os.path.basename(archivo)}: {e}")
+    
+    if lista_df:
+        return pd.concat(lista_df, ignore_index=True)
+    return None
 # =========================================================
 # 4. CONFIGURACIÓN DE LA PÁGINA
 # =========================================================
@@ -546,12 +590,62 @@ st.markdown("---")
 # =========================================================
 # 5. CUERPO PRINCIPAL
 # =========================================================
-archivos_subidos = st.file_uploader(
-    "📂 Selecciona tus archivos Excel 'Ventas_*.xlsx'", 
-    type=['xlsx'], 
-    accept_multiple_files=True,
-    help="Puedes seleccionar uno o varios archivos Excel para procesar"
-)
+# Intentar cargar datos automáticamente al iniciar
+if st.session_state.datos_cargados is None:
+    with st.spinner('🔄 Cargando archivos desde GitHub...'):
+        df_auto = cargar_archivos_desde_carpeta()
+        if df_auto is not None:
+            st.session_state.datos_cargados = df_auto
+            st.session_state.tipo_carga = "automática"
+
+# Panel de opciones de carga
+with st.expander("📁 Fuente de datos", expanded=True):
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### 📂 Datos desde GitHub")
+        if st.button("🔄 Recargar datos automáticos", use_container_width=True):
+            df_auto = cargar_archivos_desde_carpeta()
+            if df_auto is not None:
+                st.session_state.datos_cargados = df_auto
+                st.session_state.tipo_carga = "automática"
+                st.success(f"✅ Cargados {len(df_auto)} registros")
+                st.rerun()
+        
+        # Mostrar qué archivos están disponibles
+        if os.path.exists("datos"):
+            archivos = glob.glob("datos/*.xlsx")
+            if archivos:
+                st.info(f"📄 Archivos disponibles: {len(archivos)}")
+                for a in archivos[:5]:
+                    st.caption(f"• {os.path.basename(a)}")
+            else:
+                st.warning("No hay archivos Excel en la carpeta 'datos/'")
+    
+    with col2:
+        st.markdown("### 💻 Carga manual")
+        archivos_subidos = st.file_uploader(
+            "Selecciona archivos desde tu computadora", 
+            type=['xlsx'], 
+            accept_multiple_files=True,
+            key="manual_upload"
+        )
+
+# Determinar qué datos usar
+if archivos_subidos:
+    with st.spinner('Procesando archivos manuales...'):
+        df_base, errores = procesar_archivos(archivos_subidos)
+        if df_base is not None:
+            st.session_state.datos_cargados = df_base
+            st.session_state.tipo_carga = "manual"
+            st.success(f"✅ Cargados {len(df_base)} registros manualmente")
+elif st.session_state.datos_cargados is not None:
+    df_base = st.session_state.datos_cargados
+    if st.session_state.tipo_carga == "automática":
+        st.success(f"📊 Usando datos de GitHub ({len(df_base)} registros)")
+else:
+    df_base = None
+    st.info("👋 No hay datos cargados. Usa 'Recargar datos automáticos' o carga archivos manualmente.")
 
 if archivos_subidos:
     with st.spinner('🔄 Procesando archivos...'):
