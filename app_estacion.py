@@ -24,6 +24,7 @@ TABLA_COMISIONES = {
     'PETROLEO DIESEL G-B': 100.0,
     'GASOLINA 93': 1000.0,
     'GASOLINA 95': 8.0,
+    'bidon 20 lt comb gas': 5000
 }
 
 # =========================================================
