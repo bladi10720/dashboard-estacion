@@ -8,7 +8,7 @@ import io
 # =========================================================
 # Ahora puedes mezclar: poner el código numérico o el nombre en mayúsculas
 TABLA_COMISIONES = {
-    '101': 5.0,         # Ejemplo: Código para Gasolina 93
+    '966879': 1000,         # Ejemplo: Código para Gasolina 93
     '102': 8.0,         # Ejemplo: Código para Gasolina 95
     '1050': 15.0,       # Código del Limpiaparabrisas
     'GASOLINA 97': 10.0,
