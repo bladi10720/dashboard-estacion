@@ -5,12 +5,28 @@ import io
 import re
 import json
 import os
-import glob          # ← Agrega ESTA línea
+import glob
 from datetime import datetime
 from difflib import get_close_matches
 
 # =========================================================
-# 1. CONFIGURACIÓN DE COMISIONES CON PERSISTENCIA
+# CONFIGURACIÓN DE LA PÁGINA
+# =========================================================
+st.set_page_config(page_title="Estación Pro - Reportes", layout="wide", page_icon="⛽")
+
+st.markdown("""
+    <style>
+    .main { background-color: #f8f9fa; }
+    [data-testid="stMetricValue"] { font-size: 28px; color: #004b87; }
+    .stButton button { background-color: #004b87; color: white; }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.title("⛽ Sistema de Gestión de Ventas - Estación Pro")
+st.markdown("---")
+
+# =========================================================
+# CONFIGURACIÓN DE COMISIONES CON PERSISTENCIA
 # =========================================================
 
 ARCHIVO_COMISIONES = "comisiones_guardadas.json"
@@ -59,17 +75,15 @@ def guardar_comisiones(comisiones):
         return False
 
 # Cargar comisiones al iniciar
-# Cargar comisiones al iniciar
 if 'TABLA_COMISIONES' not in st.session_state:
     st.session_state.TABLA_COMISIONES = cargar_comisiones()
 
-# Variables para controlar la carga automática (esto va FUERA del if anterior)
+# Variables para controlar la carga automática
 if 'datos_cargados' not in st.session_state:
     st.session_state.datos_cargados = None
 
 if 'tipo_carga' not in st.session_state:
     st.session_state.tipo_carga = None
-    st.session_state.TABLA_COMISIONES = cargar_comisiones()
 
 # Palabras clave para búsqueda flexible
 PALABRAS_CLAVE_COMISIONES = {
@@ -83,6 +97,7 @@ PALABRAS_CLAVE_COMISIONES = {
 # =========================================================
 # 2. FUNCIONES AUXILIARES
 # =========================================================
+
 def normalizar_texto(texto):
     """Normaliza texto para búsqueda"""
     if pd.isna(texto) or texto is None:
@@ -254,18 +269,18 @@ def crear_graficos(df_filtrado):
             st.plotly_chart(fig_line, use_container_width=True)
     
     with tab3:
-        top_productos = df_filtrado.groupby('Descripcion')['Valor'].sum().nlargest(10)
-        if len(top_productos) > 0:
-            fig_pie = px.pie(values=top_productos.values, 
-                            names=top_productos.index,
-                            title="Top 10 Productos por Ventas")
-            st.plotly_chart(fig_pie, use_container_width=True)
-        else:
-            st.info("No hay datos suficientes para mostrar el gráfico")
-
-def exportar_reporte(df, nombre_archivo="reporte_comisiones.xlsx"):
-    """Exporta el reporte a Excel con múltiples hojas"""
-    output = io.BytesIO()
+        if 'Descripcion' in df_filtrado.columns:
+            top_productos = df_filtrado.groupby('Descripcion')['Valor'].sum().nlargest(10)
+            if len(top_productos) > 0:
+                fig_pie = px.pie(values=top_productos.values, 
+                                names=top_productos.index,
+                                title="Top 10 Productos por Ventas")
+                st.plotly_chart(fig_pie, use_container_width=True)
+            else:
+                st.info("No hay datos suficientes para mostrar el gráfico")
+    def exportar_reporte(df, nombre_archivo="reporte_comisiones.xlsx"):
+   # """Exporta el reporte a Excel con múltiples hojas"""
+      output = io.BytesIO()
     
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         # Hoja 1: Detalle
@@ -273,28 +288,35 @@ def exportar_reporte(df, nombre_archivo="reporte_comisiones.xlsx"):
         df_detalle.to_excel(writer, sheet_name='Detalle Ventas', index=False)
         
         # Hoja 2: Resumen por Cajero
-        resumen_cajero = df.groupby('Nombre Cajero').agg({
-            'Valor': 'sum',
-            'Pago_Comision': 'sum',
-            'Cantidad': 'sum'
-        }).round(2)
-        resumen_cajero.columns = ['Total Ventas', 'Total Comisiones', 'Volumen']
-        resumen_cajero['% Comisión'] = (resumen_cajero['Total Comisiones'] / resumen_cajero['Total Ventas'] * 100).round(2)
-        resumen_cajero.to_excel(writer, sheet_name='Resumen por Cajero')
+        if 'Nombre Cajero' in df.columns:
+            resumen_cajero = df.groupby('Nombre Cajero').agg({
+                'Valor': 'sum',
+                'Pago_Comision': 'sum',
+                'Cantidad': 'sum'
+            }).round(2)
+            resumen_cajero.columns = ['Total Ventas', 'Total Comisiones', 'Volumen']
+            if 'Total Ventas' in resumen_cajero.columns:
+                resumen_cajero['% Comisión'] = (resumen_cajero['Total Comisiones'] / resumen_cajero['Total Ventas'] * 100).round(2)
+            resumen_cajero.to_excel(writer, sheet_name='Resumen por Cajero')
         
         # Hoja 3: Resumen por Producto
-        resumen_producto = df.groupby('Descripcion').agg({
-            'Valor': 'sum',
-            'Cantidad': 'sum'
-        }).nlargest(20, 'Valor')
-        resumen_producto.columns = ['Total Ventas', 'Volumen']
-        resumen_producto.to_excel(writer, sheet_name='Top Productos')
+        if 'Descripcion' in df.columns:
+            resumen_producto = df.groupby('Descripcion').agg({
+                'Valor': 'sum',
+                'Cantidad': 'sum'
+            }).nlargest(20, 'Valor')
+            resumen_producto.columns = ['Total Ventas', 'Volumen']
+            resumen_producto.to_excel(writer, sheet_name='Top Productos')
     
     return output.getvalue()
+
 def mostrar_productos_sin_comision(df, tabla_comisiones, palabras_clave):
     """
     Identifica y muestra productos que no tienen comisión asignada
     """
+    if 'Descripcion' not in df.columns:
+        return []
+    
     productos_unicos = df['Descripcion'].unique()
     productos_sin_comision = []
     
@@ -461,9 +483,6 @@ def debug_nombres_productos(df):
                     st.write("---")
             else:
                 st.warning(f"No se encontraron productos con '{texto_buscar}'")
-                st.info("Los productos disponibles son:")
-                for prod in productos_unicos[:10]:
-                    st.write(f"• {prod}")
 
 # =========================================================
 # 3. CARGA DE DATOS MEJORADA
@@ -537,13 +556,13 @@ def procesar_archivos(lista_archivos):
         return df_final, errores
     
     return None, errores
+
 def cargar_archivos_desde_carpeta():
     """Carga automáticamente todos los Excel de la carpeta 'datos/'"""
     
     carpeta_datos = "datos"
     archivos_encontrados = []
     
-    # Buscar archivos Excel en la carpeta datos/
     if os.path.exists(carpeta_datos):
         archivos_encontrados = glob.glob(f"{carpeta_datos}/*.xlsx")
         archivos_encontrados.extend(glob.glob(f"{carpeta_datos}/*.xls"))
@@ -555,94 +574,29 @@ def cargar_archivos_desde_carpeta():
     
     for archivo in archivos_encontrados:
         try:
-            # Usar la misma lógica que procesar_archivos
-            df_temp = pd.read_excel(archivo, header=None)
+            df = pd.read_excel(archivo, skiprows=7)
+            df.columns = [str(c).strip() for c in df.columns]
             
-            # Buscar la fila que contiene 'Fecha' (encabezados)
-            header_row = None
-            for idx, row in df_temp.iterrows():
-                if 'Fecha' in str(row.values):
-                    header_row = idx
-                    break
+            if 'Fecha' in df.columns:
+                df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+                df = df.dropna(subset=['Fecha'])
             
-            if header_row is not None:
-                df = pd.read_excel(archivo, skiprows=header_row)
-            else:
-                df = pd.read_excel(archivo, skiprows=7)
-            
-            # Limpiar nombres de columnas
-            df.columns = [str(c).strip().replace('\n', ' ') for c in df.columns]
-            
-            # Columnas que necesitamos
-            columnas_necesarias = ['Fecha', 'Hora', 'cod Producto', 'Descripcion', 
-                                   'Cantidad', 'Valor', 'Nombre Cajero', 'MOP1']
-            cols_presentes = [c for c in columnas_necesarias if c in df.columns]
-            
-            if not cols_presentes:
-                st.warning(f"{os.path.basename(archivo)}: No tiene las columnas esperadas")
-                continue
-            
-            df_sel = df[cols_presentes].copy()
-            
-            # Procesar fechas
-            if 'Fecha' in df_sel.columns:
-                df_sel['Fecha'] = pd.to_datetime(df_sel['Fecha'], dayfirst=True, errors='coerce')
-                df_sel = df_sel.dropna(subset=['Fecha'])
-            
-            # Limpiar datos numéricos
             for col in ['Cantidad', 'Valor']:
-                if col in df_sel.columns:
-                    df_sel[col] = pd.to_numeric(df_sel[col], errors='coerce').fillna(0)
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
-            # Limpiar datos de texto
-            for col in ['Nombre Cajero', 'Descripcion']:
-                if col in df_sel.columns:
-                    df_sel[col] = df_sel[col].astype(str).fillna('').str.strip()
-            
-            lista_df.append(df_sel)
-            st.success(f"✅ Procesado: {os.path.basename(archivo)}")
+            lista_df.append(df)
             
         except Exception as e:
-            st.error(f"Error en {os.path.basename(archivo)}: {str(e)}")
+            st.warning(f"Error cargando {os.path.basename(archivo)}: {e}")
     
     if lista_df:
-        df_final = pd.concat(lista_df, ignore_index=True)
-        return df_final
-    
-    return None
+        return pd.concat(lista_df, ignore_index=True)
+    return None   
+ # =========================================================
+# 4. INTERFAZ PRINCIPAL - PANEL DE CARGA
 # =========================================================
-# 4. CONFIGURACIÓN DE LA PÁGINA
-# =========================================================
-st.set_page_config(page_title="Estación Pro - Reportes", layout="wide", page_icon="⛽")
 
-st.markdown("""
-    <style>
-    .main { background-color: #f8f9fa; }
-    [data-testid="stMetricValue"] { font-size: 28px; color: #004b87; }
-    .stButton button { background-color: #004b87; color: white; }
-    </style>
-    """, unsafe_allow_html=True)
-
-st.title("⛽ Sistema de Gestión de Ventas - Estación Pro")
-st.markdown("---")
-
-# =========================================================
-# 5. CUERPO PRINCIPAL
-# =========================================================
-# Intentar cargar datos automáticamente al iniciar
-if st.session_state.datos_cargados is None:
-    with st.spinner('🔄 Cargando archivos desde GitHub...'):
-        df_auto = cargar_archivos_desde_carpeta()
-        if df_auto is not None:
-            st.session_state.datos_cargados = df_auto
-            st.session_state.tipo_carga = "automática"
-                 # Mostrar información de depuración
-            with st.expander("🔍 Información de depuración", expanded=False):
-                st.write("Columnas encontradas:", list(df_auto.columns))
-                st.write("Primeras filas:", df_auto.head(3))
-                st.write("Total registros:", len(df_auto))       
-
-# Panel de opciones de carga
 with st.expander("📁 Fuente de datos", expanded=True):
     col1, col2 = st.columns(2)
     
@@ -661,13 +615,13 @@ with st.expander("📁 Fuente de datos", expanded=True):
         else:
             st.warning("La carpeta 'datos/' no existe")
         
-        if st.button("🔄 Recargar datos automáticos", use_container_width=True):
+        if st.button("🔄 Cargar datos desde GitHub", use_container_width=True):
             with st.spinner('Cargando archivos...'):
-                df_auto_temp = cargar_archivos_desde_carpeta()
-                if df_auto_temp is not None:
-                    st.session_state.datos_cargados = df_auto_temp
+                df_temp = cargar_archivos_desde_carpeta()
+                if df_temp is not None:
+                    st.session_state.datos_cargados = df_temp
                     st.session_state.tipo_carga = "automática"
-                    st.success(f"✅ Cargados {len(df_auto_temp)} registros")
+                    st.success(f"✅ Cargados {len(df_temp)} registros")
                     st.rerun()
                 else:
                     st.error("❌ No se pudieron cargar los archivos")
@@ -683,311 +637,238 @@ with st.expander("📁 Fuente de datos", expanded=True):
         
         if archivos_subidos:
             with st.spinner('Procesando archivos manuales...'):
-                df_manual_temp, errores = procesar_archivos(archivos_subidos)
-                if df_manual_temp is not None:
-                    st.session_state.datos_cargados = df_manual_temp
+                df_temp, errores = procesar_archivos(archivos_subidos)
+                if df_temp is not None:
+                    st.session_state.datos_cargados = df_temp
                     st.session_state.tipo_carga = "manual"
-                    st.success(f"✅ Cargados {len(df_manual_temp)} registros manualmente")
+                    st.success(f"✅ Cargados {len(df_temp)} registros manualmente")
                     st.rerun()
-    
-    # Diagnóstico
-    st.divider()
-    with st.expander("🔧 Diagnóstico", expanded=False):
-        if st.button("📊 Ver estado actual"):
-            if st.session_state.datos_cargados is not None:
-                st.write(f"**Registros:** {len(st.session_state.datos_cargados)}")
-                st.write(f"**Tipo carga:** {st.session_state.get('tipo_carga', 'N/A')}")
-                st.write(f"**Columnas:** {list(st.session_state.datos_cargados.columns)}")
-            else:
-                st.warning("No hay datos cargados")
 
-# Determinar qué datos usar
-# Determinar qué datos usar
-if archivos_subidos:
-    with st.spinner('Procesando archivos manuales...'):
-        df_base, errores = procesar_archivos(archivos_subidos)
-        if df_base is not None:
-            # Asegurar que los datos tengan las columnas necesarias
-            if 'Descripcion' in df_base.columns:
-                df_base['Descripcion'] = df_base['Descripcion'].astype(str).str.strip()
-            if 'cod Producto' in df_base.columns:
-                df_base['cod Producto'] = df_base['cod Producto'].astype(str).str.strip()
-            
-            st.session_state.datos_cargados = df_base
-            st.session_state.tipo_carga = "manual"
-            st.success(f"✅ Cargados {len(df_base)} registros manualmente")
-elif st.session_state.datos_cargados is not None:
-    df_base = st.session_state.datos_cargados
+# =========================================================
+# 5. OBTENER LOS DATOS CARGADOS
+# =========================================================
+
+df_base = st.session_state.datos_cargados
+
+# =========================================================
+# 6. MOSTRAR LA APLICACIÓN COMPLETA
+# =========================================================
+
+if df_base is not None and not df_base.empty:
+    st.success(f"✅ Datos cargados correctamente - {len(df_base)} registros")
     
-    # Asegurar que los datos tengan las columnas necesarias (mismo procesamiento)
-    if df_base is not None and not df_base.empty:
-        if 'Descripcion' in df_base.columns:
-            df_base['Descripcion'] = df_base['Descripcion'].astype(str).str.strip()
-        if 'cod Producto' in df_base.columns:
-            df_base['cod Producto'] = df_base['cod Producto'].astype(str).str.strip()
+    # Procesar datos para mostrar
+    if 'cod Producto' in df_base.columns:
+        df_base['cod Producto'] = df_base['cod Producto'].astype(str).str.strip()
     
-    if st.session_state.tipo_carga == "automática":
-        st.success(f"📊 Usando datos de GitHub ({len(df_base)} registros)")
+    df_base['Descripcion'] = df_base['Descripcion'].astype(str).str.strip()
+    
+    if 'cod Producto' in df_base.columns:
+        df_base['Producto_Info'] = df_base['cod Producto'] + " - " + df_base['Descripcion']
     else:
-        st.info(f"📊 Datos cargados ({len(df_base)} registros)")
-else:
-    df_base = None
-    st.info("👋 No hay datos cargados. Usa 'Recargar datos automáticos' o carga archivos manualmente.")
-
-if archivos_subidos:
-    with st.spinner('🔄 Procesando archivos...'):
-        df_base, errores = procesar_archivos(archivos_subidos)
+        df_base['Producto_Info'] = df_base['Descripcion']
     
-    if df_base is not None and not df_base.empty:
-        # Validar datos
-        es_valido, mensaje = validar_datos(df_base)
+    # Interfaz de gestión de comisiones
+    interfaz_gestion_comisiones(df_base)
+    
+    # Debug de nombres
+    debug_nombres_productos(df_base)
+    
+    # =========================================================
+    # PANEL DE FILTROS COMPLETO
+    # =========================================================
+    with st.expander("🔍 Panel de Filtros Avanzados", expanded=True):
+        f1, f2, f3, f4 = st.columns(4)
         
-        if not es_valido:
-            st.warning(f"⚠️ Advertencia: {mensaje}")
-        else:
-            st.success("✅ Datos cargados correctamente")
+        with f1:
+            if 'Fecha' in df_base.columns:
+                fecha_min = df_base['Fecha'].min()
+                fecha_max = df_base['Fecha'].max()
+                rango = st.date_input(
+                    "📅 Periodo:", 
+                    [fecha_min, fecha_max],
+                    min_value=fecha_min,
+                    max_value=fecha_max
+                )
+            else:
+                rango = []
+                st.warning("No hay datos de fecha")
         
-        # Mostrar estadísticas básicas
-        with st.expander("📊 Estadísticas de Carga"):
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Archivos", len(archivos_subidos))
-            with col2:
-                st.metric("Total Registros", len(df_base))
-            with col3:
-                if 'Fecha' in df_base.columns:
-                    st.metric("Rango de Fechas", 
-                             f"{df_base['Fecha'].min().strftime('%d/%m/%Y')} - {df_base['Fecha'].max().strftime('%d/%m/%Y')}")
+        with f2:
+            if 'Nombre Cajero' in df_base.columns:
+                vendedores_opciones = sorted(df_base['Nombre Cajero'].unique())
+                vendedores = st.multiselect(
+                    "👤 Vendedor:", 
+                    vendedores_opciones,
+                    default=vendedores_opciones,
+                    help="Selecciona uno o más vendedores"
+                )
+            else:
+                vendedores = []
+                st.warning("No hay datos de vendedor")
         
-        # Procesar datos
-        if 'cod Producto' in df_base.columns:
-            df_base['cod Producto'] = df_base['cod Producto'].astype(str).str.strip()
+        with f3:
+            if 'Producto_Info' in df_base.columns:
+                productos_opciones = sorted(df_base['Producto_Info'].unique())
+                productos_sel = st.multiselect(
+                    "🛒 Producto:", 
+                    productos_opciones,
+                    default=productos_opciones,
+                    help="Selecciona uno o más productos"
+                )
+            else:
+                productos_sel = []
+                st.warning("No hay datos de productos")
         
-        df_base['Descripcion'] = df_base['Descripcion'].astype(str).str.strip()
-        
-        if 'cod Producto' in df_base.columns:
-            df_base['Producto_Info'] = df_base['cod Producto'] + " - " + df_base['Descripcion']
-        else:
-            df_base['Producto_Info'] = df_base['Descripcion']
-        
-        # Interfaz de gestión de comisiones
-        interfaz_gestion_comisiones(df_base)
-        
-        # Debug de nombres
-        debug_nombres_productos(df_base)
-        
-        # =========================================================
-        # PANEL DE FILTROS COMPLETO
-        # =========================================================
-        with st.expander("🔍 Panel de Filtros Avanzados", expanded=True):
-            f1, f2, f3, f4 = st.columns(4)
-            
-            with f1:
-                if 'Fecha' in df_base.columns:
-                    fecha_min = df_base['Fecha'].min()
-                    fecha_max = df_base['Fecha'].max()
-                    rango = st.date_input(
-                        "📅 Periodo:", 
-                        [fecha_min, fecha_max],
-                        min_value=fecha_min,
-                        max_value=fecha_max
+        with f4:
+            if 'MOP1' in df_base.columns:
+                mop1_clean = df_base['MOP1'].dropna()
+                if len(mop1_clean) > 0:
+                    medios_opciones = sorted(mop1_clean.unique())
+                    medios = st.multiselect(
+                        "💳 Método de Pago:", 
+                        medios_opciones,
+                        default=medios_opciones,
+                        help="Selecciona uno o más métodos de pago"
                     )
-                else:
-                    rango = []
-                    st.warning("No hay datos de fecha")
-            
-            with f2:
-                if 'Nombre Cajero' in df_base.columns:
-                    vendedores_opciones = sorted(df_base['Nombre Cajero'].unique())
-                    vendedores = st.multiselect(
-                        "👤 Vendedor:", 
-                        vendedores_opciones,
-                        default=vendedores_opciones,
-                        help="Selecciona uno o más vendedores"
-                    )
-                else:
-                    vendedores = []
-                    st.warning("No hay datos de vendedor")
-            
-            with f3:
-                if 'Producto_Info' in df_base.columns:
-                    productos_opciones = sorted(df_base['Producto_Info'].unique())
-                    productos_sel = st.multiselect(
-                        "🛒 Producto (Código - Descripción):", 
-                        productos_opciones,
-                        default=productos_opciones,
-                        help="Selecciona uno o más productos"
-                    )
-                else:
-                    productos_sel = []
-                    st.warning("No hay datos de productos")
-            
-            with f4:
-                if 'MOP1' in df_base.columns:
-                    mop1_clean = df_base['MOP1'].dropna()
-                    if len(mop1_clean) > 0:
-                        medios_opciones = sorted(mop1_clean.unique())
-                        medios = st.multiselect(
-                            "💳 Método de Pago:", 
-                            medios_opciones,
-                            default=medios_opciones,
-                            help="Selecciona uno o más métodos de pago"
-                        )
-                    else:
-                        medios = []
-                        st.info("No hay datos de método de pago")
                 else:
                     medios = []
                     st.info("No hay datos de método de pago")
+            else:
+                medios = []
+                st.info("No hay datos de método de pago")
+    
+    # =========================================================
+    # APLICAR FILTROS
+    # =========================================================
+    mask = pd.Series([True] * len(df_base))
+    
+    if len(rango) == 2 and 'Fecha' in df_base.columns:
+        mask &= (df_base['Fecha'] >= pd.Timestamp(rango[0])) & \
+                (df_base['Fecha'] <= pd.Timestamp(rango[1]))
+    
+    if vendedores and 'Nombre Cajero' in df_base.columns:
+        mask &= df_base['Nombre Cajero'].isin(vendedores)
+    
+    if productos_sel and 'Producto_Info' in df_base.columns:
+        mask &= df_base['Producto_Info'].isin(productos_sel)
+    
+    if medios and 'MOP1' in df_base.columns:
+        mask &= df_base['MOP1'].isin(medios)
+    
+    df_filtrado = df_base.loc[mask].copy()
+    
+    # =========================================================
+    # MOSTRAR RESULTADOS
+    # =========================================================
+    if df_filtrado.empty:
+        st.warning("⚠️ No hay datos que coincidan con los filtros seleccionados")
+        st.info("💡 Prueba a seleccionar menos filtros o ampliar el rango de fechas")
+    else:
+        # Calcular comisiones
+        with st.spinner('💰 Calculando comisiones...'):
+            df_filtrado['Pago_Comision'] = df_filtrado.apply(
+                lambda row: calcular_comision_segura(
+                    row, 
+                    st.session_state.TABLA_COMISIONES, 
+                    PALABRAS_CLAVE_COMISIONES
+                ), 
+                axis=1
+            )
         
-        # =========================================================
-        # APLICAR FILTROS
-        # =========================================================
-        mask = pd.Series([True] * len(df_base))
+        st.success(f"✅ Mostrando {len(df_filtrado):,} registros")
+        st.markdown("---")
         
-        if len(rango) == 2 and 'Fecha' in df_base.columns:
-            mask &= (df_base['Fecha'] >= pd.Timestamp(rango[0])) & \
-                    (df_base['Fecha'] <= pd.Timestamp(rango[1]))
+        # Mostrar métricas
+        mostrar_metricas(df_filtrado)
         
-        if vendedores and 'Nombre Cajero' in df_base.columns:
-            mask &= df_base['Nombre Cajero'].isin(vendedores)
+        st.markdown("---")
         
-        if productos_sel and 'Producto_Info' in df_base.columns:
-            mask &= df_base['Producto_Info'].isin(productos_sel)
+        # Mostrar gráficos
+        crear_graficos(df_filtrado)
         
-        if medios and 'MOP1' in df_base.columns:
-            mask &= df_base['MOP1'].isin(medios)
+        # Tabla de resumen por cajero
+        with st.expander("💰 Resumen de Liquidación por Cajero", expanded=True):
+            if 'Nombre Cajero' in df_filtrado.columns:
+                resumen = df_filtrado.groupby('Nombre Cajero').agg({
+                    'Pago_Comision': 'sum',
+                    'Valor': 'sum',
+                    'Cantidad': 'sum'
+                }).round(2)
+                resumen.columns = ['Total Comisiones', 'Total Ventas', 'Volumen']
+                if 'Total Ventas' in resumen.columns:
+                    resumen['% Comisión'] = (resumen['Total Comisiones'] / resumen['Total Ventas'] * 100).round(2)
+                resumen = resumen.sort_values('Total Comisiones', ascending=False)
+                
+                st.dataframe(resumen.style.format({
+                    'Total Comisiones': '${:,.0f}',
+                    'Total Ventas': '${:,.0f}',
+                    'Volumen': '{:,.1f}',
+                    '% Comisión': '{:.2f}%'
+                }), use_container_width=True)
+            else:
+                st.info("No hay datos de vendedores")
         
-        df_filtrado = df_base.loc[mask].copy()
-        
-        # =========================================================
-        # MOSTRAR RESULTADOS
-        # =========================================================
-        if df_filtrado.empty:
-            st.warning("⚠️ No hay datos que coincidan con los filtros seleccionados")
-            st.info("💡 Prueba a seleccionar menos filtros o ampliar el rango de fechas")
-        else:
-            # Calcular comisiones
-            with st.spinner('💰 Calculando comisiones...'):
-                df_filtrado['Pago_Comision'] = df_filtrado.apply(
-                    lambda row: calcular_comision_segura(
-                        row, 
-                        st.session_state.TABLA_COMISIONES, 
-                        PALABRAS_CLAVE_COMISIONES
-                    ), 
-                    axis=1
-                )
-            
-            st.success(f"✅ Mostrando {len(df_filtrado):,} registros")
-            st.markdown("---")
-            
-            # Mostrar métricas
-            mostrar_metricas(df_filtrado)
-            
-            st.markdown("---")
-            
-            # Mostrar gráficos
-            crear_graficos(df_filtrado)
-            
-            # Tabla de resumen por cajero
-            with st.expander("💰 Resumen de Liquidación por Cajero", expanded=True):
-                if 'Nombre Cajero' in df_filtrado.columns:
-                    resumen = df_filtrado.groupby('Nombre Cajero').agg({
-                        'Pago_Comision': 'sum',
-                        'Valor': 'sum',
-                        'Cantidad': 'sum'
-                    }).round(2)
-                    resumen.columns = ['Total Comisiones', 'Total Ventas', 'Volumen']
-                    if 'Total Ventas' in resumen.columns:
-                        resumen['% Comisión'] = (resumen['Total Comisiones'] / resumen['Total Ventas'] * 100).round(2)
-                    resumen = resumen.sort_values('Total Comisiones', ascending=False)
-                    
-                    st.dataframe(resumen.style.format({
-                        'Total Comisiones': '${:,.0f}',
-                        'Total Ventas': '${:,.0f}',
-                        'Volumen': '{:,.1f}',
-                        '% Comisión': '{:.2f}%'
+        # Resumen de comisiones por producto
+        with st.expander("📊 Resumen de Comisiones por Producto"):
+            if 'Descripcion' in df_filtrado.columns:
+                resumen_comisiones = df_filtrado.groupby('Descripcion').agg({
+                    'Cantidad': 'sum',
+                    'Pago_Comision': 'sum',
+                    'Valor': 'sum'
+                }).round(2)
+                resumen_comisiones = resumen_comisiones[resumen_comisiones['Pago_Comision'] > 0]
+                resumen_comisiones = resumen_comisiones.sort_values('Pago_Comision', ascending=False)
+                
+                if not resumen_comisiones.empty:
+                    st.dataframe(resumen_comisiones.style.format({
+                        'Cantidad': '{:,.1f}',
+                        'Pago_Comision': '${:,.0f}',
+                        'Valor': '${:,.0f}'
                     }), use_container_width=True)
                 else:
-                    st.info("No hay datos de vendedores")
-            
-            # Resumen de comisiones por producto
-            with st.expander("📊 Resumen de Comisiones por Producto"):
-                if 'Descripcion' in df_filtrado.columns:
-                    resumen_comisiones = df_filtrado.groupby('Descripcion').agg({
-                        'Cantidad': 'sum',
-                        'Pago_Comision': 'sum',
-                        'Valor': 'sum'
-                    }).round(2)
-                    resumen_comisiones = resumen_comisiones[resumen_comisiones['Pago_Comision'] > 0]
-                    resumen_comisiones = resumen_comisiones.sort_values('Pago_Comision', ascending=False)
-                    
-                    if not resumen_comisiones.empty:
-                        st.dataframe(resumen_comisiones.style.format({
-                            'Cantidad': '{:,.1f}',
-                            'Pago_Comision': '${:,.0f}',
-                            'Valor': '${:,.0f}'
-                        }), use_container_width=True)
-                    else:
-                        st.warning("⚠️ No se encontraron comisiones calculadas para ningún producto")
-                        st.info("💡 Verifica que los productos tengan comisión asignada en la sección 'Gestión de Comisiones'")
-                else:
-                    st.info("No hay datos de productos")
-            
-            # Detalle de transacciones
-            with st.expander("📋 Ver detalle de todas las transacciones"):
-                columnas_mostrar = ['Fecha', 'Hora', 'Nombre Cajero', 'Producto_Info', 'Cantidad', 'Valor', 'Pago_Comision']
-                columnas_disponibles = [col for col in columnas_mostrar if col in df_filtrado.columns]
-                
-                if columnas_disponibles:
-                    st.dataframe(
-                        df_filtrado[columnas_disponibles].style.format({
-                            'Valor': '${:,.0f}',
-                            'Pago_Comision': '${:,.0f}',
-                            'Cantidad': '{:,.1f}'
-                        }),
-                        use_container_width=True,
-                        height=400
-                    )
-                else:
-                    st.info("No hay columnas para mostrar")
-            
-            # Exportar reporte
-            st.markdown("---")
-            col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
-            with col_btn2:
-                if st.button("📥 Exportar Reporte a Excel", use_container_width=True):
-                    with st.spinner('Generando reporte...'):
-                        excel_data = exportar_reporte(df_filtrado)
-                        st.download_button(
-                            label="💾 Descargar Reporte",
-                            data=excel_data,
-                            file_name=f"reporte_comisiones_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True
-                        )
-    
-    else:
-        st.error("❌ No se pudieron procesar los archivos. Verifica el formato de los archivos Excel.")
+                    st.warning("⚠️ No se encontraron comisiones calculadas para ningún producto")
+                    st.info("💡 Verifica que los productos tengan comisión asignada en la sección 'Gestión de Comisiones'")
+            else:
+                st.info("No hay datos de productos")
         
-        with st.expander("🆘 ¿Necesitas ayuda?"):
-            st.markdown("""
-            **Formato esperado del archivo Excel:**
-            - El archivo debe tener las siguientes columnas:
-                - `Fecha` (formato dd/mm/yyyy)
-                - `Hora` (formato HH:MM:SS)
-                - `Descripcion` (nombre del producto)
-                - `Cantidad` (número de unidades/litros)
-                - `Valor` (monto de la venta)
-                - `Nombre Cajero` (nombre del vendedor)
-            - Opcionalmente puede incluir:
-                - `cod Producto` (código del producto)
-                - `MOP1` (método de pago)
-            """)
+        # Detalle de transacciones
+        with st.expander("📋 Ver detalle de todas las transacciones"):
+            columnas_mostrar = ['Fecha', 'Hora', 'Nombre Cajero', 'Producto_Info', 'Cantidad', 'Valor', 'Pago_Comision']
+            columnas_disponibles = [col for col in columnas_mostrar if col in df_filtrado.columns]
+            
+            if columnas_disponibles:
+                st.dataframe(
+                    df_filtrado[columnas_disponibles].style.format({
+                        'Valor': '${:,.0f}',
+                        'Pago_Comision': '${:,.0f}',
+                        'Cantidad': '{:,.1f}'
+                    }),
+                    use_container_width=True,
+                    height=400
+                )
+            else:
+                st.info("No hay columnas para mostrar")
+        
+        # Exportar reporte
+        st.markdown("---")
+        col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+        with col_btn2:
+            if st.button("📥 Exportar Reporte a Excel", use_container_width=True):
+                with st.spinner('Generando reporte...'):
+                    excel_data = exportar_reporte(df_filtrado)
+                    st.download_button(
+                        label="💾 Descargar Reporte",
+                        data=excel_data,
+                        file_name=f"reporte_comisiones_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
 
 else:
-    st.info("👋 **Bienvenido al Sistema de Gestión de Ventas**\n\nPor favor, selecciona tus archivos Excel 'Ventas_*.xlsx' para comenzar a analizar tus datos.")
+    st.info("👋 **Bienvenido al Sistema de Gestión de Ventas**\n\nPor favor, selecciona tus archivos Excel o usa 'Cargar datos desde GitHub' para comenzar a analizar tus datos.")
     
+    # Mostrar ejemplo
     with st.expander("📖 Ver ejemplo de uso"):
         st.markdown("""
         ### ¿Cómo usar esta aplicación?
@@ -997,10 +878,20 @@ else:
         3. **Aplica filtros** para analizar periodos específicos, vendedores o productos
         4. **Visualiza métricas** y gráficos automáticos
         5. **Exporta reportes** a Excel con un solo clic
+        
+        ### Características:
+        - ✅ Soporte para múltiples archivos
+        - ✅ Cálculo automático de comisiones
+        - ✅ Filtros dinámicos (fecha, vendedor, producto, método de pago)
+        - ✅ Gráficos interactivos
+        - ✅ Exportación a Excel
+        - ✅ Manejo robusto de errores
+        - ✅ Detección flexible de productos
+        - ✅ Gestión de comisiones integrada
         """)
 
 # =========================================================
-# 6. FOOTER
+# 7. FOOTER
 # =========================================================
 st.markdown("---")
 st.markdown(
@@ -1009,4 +900,4 @@ st.markdown(
     "Las comisiones se guardan automáticamente en 'comisiones_guardadas.json'"
     "</div>",
     unsafe_allow_html=True
-)
+)        
