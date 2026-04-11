@@ -555,25 +555,60 @@ def cargar_archivos_desde_carpeta():
     
     for archivo in archivos_encontrados:
         try:
-            df = pd.read_excel(archivo, skiprows=7)
-            df.columns = [str(c).strip() for c in df.columns]
+            # Usar la misma lógica que procesar_archivos
+            df_temp = pd.read_excel(archivo, header=None)
             
-            if 'Fecha' in df.columns:
-                df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
-                df = df.dropna(subset=['Fecha'])
+            # Buscar la fila que contiene 'Fecha' (encabezados)
+            header_row = None
+            for idx, row in df_temp.iterrows():
+                if 'Fecha' in str(row.values):
+                    header_row = idx
+                    break
             
+            if header_row is not None:
+                df = pd.read_excel(archivo, skiprows=header_row)
+            else:
+                df = pd.read_excel(archivo, skiprows=7)
+            
+            # Limpiar nombres de columnas
+            df.columns = [str(c).strip().replace('\n', ' ') for c in df.columns]
+            
+            # Columnas que necesitamos
+            columnas_necesarias = ['Fecha', 'Hora', 'cod Producto', 'Descripcion', 
+                                   'Cantidad', 'Valor', 'Nombre Cajero', 'MOP1']
+            cols_presentes = [c for c in columnas_necesarias if c in df.columns]
+            
+            if not cols_presentes:
+                st.warning(f"{os.path.basename(archivo)}: No tiene las columnas esperadas")
+                continue
+            
+            df_sel = df[cols_presentes].copy()
+            
+            # Procesar fechas
+            if 'Fecha' in df_sel.columns:
+                df_sel['Fecha'] = pd.to_datetime(df_sel['Fecha'], dayfirst=True, errors='coerce')
+                df_sel = df_sel.dropna(subset=['Fecha'])
+            
+            # Limpiar datos numéricos
             for col in ['Cantidad', 'Valor']:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                if col in df_sel.columns:
+                    df_sel[col] = pd.to_numeric(df_sel[col], errors='coerce').fillna(0)
             
-            lista_df.append(df)
-            st.success(f"✅ Cargado: {os.path.basename(archivo)}")
+            # Limpiar datos de texto
+            for col in ['Nombre Cajero', 'Descripcion']:
+                if col in df_sel.columns:
+                    df_sel[col] = df_sel[col].astype(str).fillna('').str.strip()
+            
+            lista_df.append(df_sel)
+            st.success(f"✅ Procesado: {os.path.basename(archivo)}")
             
         except Exception as e:
-            st.warning(f"Error en {os.path.basename(archivo)}: {e}")
+            st.error(f"Error en {os.path.basename(archivo)}: {str(e)}")
     
     if lista_df:
-        return pd.concat(lista_df, ignore_index=True)
+        df_final = pd.concat(lista_df, ignore_index=True)
+        return df_final
+    
     return None
 # =========================================================
 # 4. CONFIGURACIÓN DE LA PÁGINA
@@ -601,6 +636,11 @@ if st.session_state.datos_cargados is None:
         if df_auto is not None:
             st.session_state.datos_cargados = df_auto
             st.session_state.tipo_carga = "automática"
+                 # Mostrar información de depuración
+            with st.expander("🔍 Información de depuración", expanded=False):
+                st.write("Columnas encontradas:", list(df_auto.columns))
+                st.write("Primeras filas:", df_auto.head(3))
+                st.write("Total registros:", len(df_auto))       
 
 # Panel de opciones de carga
 with st.expander("📁 Fuente de datos", expanded=True):
@@ -609,22 +649,26 @@ with st.expander("📁 Fuente de datos", expanded=True):
     with col1:
         st.markdown("### 📂 Datos desde GitHub")
         if st.button("🔄 Recargar datos automáticos", use_container_width=True):
-            df_auto = cargar_archivos_desde_carpeta()
-            if df_auto is not None:
-                st.session_state.datos_cargados = df_auto
-                st.session_state.tipo_carga = "automática"
-                st.success(f"✅ Cargados {len(df_auto)} registros")
-                st.rerun()
+         df_auto = cargar_archivos_desde_carpeta()
+    if df_auto is not None:
+        st.session_state.datos_cargados = df_auto
+        st.session_state.tipo_carga = "automática"
+        st.success(f"✅ Cargados {len(df_auto)} registros")
         
-        # Mostrar qué archivos están disponibles
+        # 👇 AGREGAR ESTO PARA MOSTRAR DIAGNÓSTICO
+        with st.expander("📊 Vista previa de datos cargados", expanded=True):
+            st.write("**Primeras 5 filas:**")
+            st.dataframe(df_auto.head(5))
+            st.write("**Columnas encontradas:**", list(df_auto.columns))
+        
+        st.rerun()  
+        
         if os.path.exists("datos"):
             archivos = glob.glob("datos/*.xlsx")
             if archivos:
                 st.info(f"📄 Archivos disponibles: {len(archivos)}")
                 for a in archivos[:5]:
                     st.caption(f"• {os.path.basename(a)}")
-            else:
-                st.warning("No hay archivos Excel en la carpeta 'datos/'")
     
     with col2:
         st.markdown("### 💻 Carga manual")
@@ -634,19 +678,55 @@ with st.expander("📁 Fuente de datos", expanded=True):
             accept_multiple_files=True,
             key="manual_upload"
         )
+    
+    # =========================================================
+    # 👇 AGREGAR EL BOTÓN DE DIAGNÓSTICO AQUÍ (DESPUÉS de las columnas)
+    # =========================================================
+    
+    st.divider()  # Línea separadora opcional
+    
+    with st.expander("🔧 Diagnóstico de datos", expanded=False):
+        if st.button("📊 Ver información de los datos cargados", use_container_width=True):
+            if df_base is not None and not df_base.empty:
+                st.write("**Columnas disponibles:**")
+                st.write(list(df_base.columns))
+                st.write("**Primeras 3 filas:**")
+                st.dataframe(df_base.head(3))
+                st.write("**Tipos de datos:**")
+                st.write(df_base.dtypes)
+                st.write("**Total de registros:**", len(df_base))
+            else:
+                st.warning("No hay datos cargados")
 
+# Determinar qué datos usar
 # Determinar qué datos usar
 if archivos_subidos:
     with st.spinner('Procesando archivos manuales...'):
         df_base, errores = procesar_archivos(archivos_subidos)
         if df_base is not None:
+            # Asegurar que los datos tengan las columnas necesarias
+            if 'Descripcion' in df_base.columns:
+                df_base['Descripcion'] = df_base['Descripcion'].astype(str).str.strip()
+            if 'cod Producto' in df_base.columns:
+                df_base['cod Producto'] = df_base['cod Producto'].astype(str).str.strip()
+            
             st.session_state.datos_cargados = df_base
             st.session_state.tipo_carga = "manual"
             st.success(f"✅ Cargados {len(df_base)} registros manualmente")
 elif st.session_state.datos_cargados is not None:
     df_base = st.session_state.datos_cargados
+    
+    # Asegurar que los datos tengan las columnas necesarias (mismo procesamiento)
+    if df_base is not None and not df_base.empty:
+        if 'Descripcion' in df_base.columns:
+            df_base['Descripcion'] = df_base['Descripcion'].astype(str).str.strip()
+        if 'cod Producto' in df_base.columns:
+            df_base['cod Producto'] = df_base['cod Producto'].astype(str).str.strip()
+    
     if st.session_state.tipo_carga == "automática":
         st.success(f"📊 Usando datos de GitHub ({len(df_base)} registros)")
+    else:
+        st.info(f"📊 Datos cargados ({len(df_base)} registros)")
 else:
     df_base = None
     st.info("👋 No hay datos cargados. Usa 'Recargar datos automáticos' o carga archivos manualmente.")
