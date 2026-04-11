@@ -37,33 +37,38 @@ ARCHIVO_COMISIONES = "comisiones_guardadas.json"
 
 def cargar_comisiones():
     """Carga las comisiones desde un archivo JSON"""
-    comisiones_por_defecto = {
-        '966879': 1000.0,
-        '102': 8.0,
-        '1050': 15.0,
-        'GASOLINA 97': 10.0,
-        'DIESEL': 4.0,
-        'KEROSENE': 6.0,
-        'ACEITE MOTOR': 500.0,
-        'ADBLUE': 16.0,
-        'DIXSEL': 100.0,
-        'PETROLEO DIESEL G-B': 100.0,
-        'GASOLINA 93': 1000.0,
-        'GASOLINA 95': 8.0,
-        'BIDON 20 LT COMB GAS': 5000.0,
-        'BIDON 20L COMB GAS': 5000.0,
-        'BIDON 20 LT': 5000.0,
-    }
+def cargar_comisiones():
+    """Carga comisiones SOLO desde Excel y JSON"""
     
+    comisiones = {}
+    
+    # 1. Cargar desde Excel
+    comisiones_excel = cargar_comisiones_desde_excel()
+    if comisiones_excel:
+        comisiones.update(comisiones_excel)
+        st.success(f"✅ Cargadas {len(comisiones_excel)} comisiones desde Excel")
+    else:
+        st.warning("⚠️ No se encontró el archivo COMISION.xlsx en la carpeta 'datos/'")
+    
+    # 2. Cargar desde JSON (sobrescribe Excel)
     if os.path.exists(ARCHIVO_COMISIONES):
         try:
             with open(ARCHIVO_COMISIONES, 'r', encoding='utf-8') as f:
                 comisiones_guardadas = json.load(f)
-                comisiones_por_defecto.update(comisiones_guardadas)
+                for codigo, valor in comisiones_guardadas.items():
+                    comisiones[codigo] = valor
+            if comisiones_guardadas:
+                st.info(f"💾 Cargadas {len(comisiones_guardadas)} comisiones desde JSON")
         except:
             pass
     
-    return comisiones_por_defecto
+    # 3. Verificar que hay comisiones
+    if not comisiones:
+        st.error("❌ No hay comisiones cargadas. Asegúrate de tener COMISION.xlsx en la carpeta 'datos/'")
+    
+    return comisiones
+    
+    
 
 def guardar_comisiones(comisiones):
     """Guarda las comisiones en un archivo JSON"""
@@ -294,6 +299,45 @@ def procesar_archivos(lista_archivos):
     if lista_df:
         return pd.concat(lista_df, ignore_index=True), errores
     return None, errores
+# 👇 AGREGAR LA NUEVA FUNCIÓN AQUÍ
+# =========================================================
+
+def cargar_comisiones_desde_excel():
+    """Carga las comisiones desde el archivo COMISION.xlsx"""
+    
+    # Buscar el archivo en diferentes ubicaciones
+    rutas_posibles = ["datos/COMISION.xlsx", "COMISION.xlsx"]
+    
+    for ruta in rutas_posibles:
+        if os.path.exists(ruta):
+            try:
+                df = pd.read_excel(ruta)
+                comisiones = {}
+                
+                # Buscar columnas de código y comisión
+                col_codigo = None
+                col_comision = None
+                
+                for col in df.columns:
+                    col_str = str(col).upper()
+                    if 'CODIGO' in col_str or 'COD' in col_str or 'CÓDIGO' in col_str:
+                        col_codigo = col
+                    if 'COMISION' in col_str or 'COMISIÓN' in col_str:
+                        col_comision = col
+                
+                if col_codigo and col_comision:
+                    for _, row in df.iterrows():
+                        codigo = str(row[col_codigo]).strip()
+                        comision = row[col_comision]
+                        if pd.notna(codigo) and pd.notna(comision) and comision != 0:
+                            comisiones[codigo] = float(comision)
+                    
+                    if comisiones:
+                        return comisiones
+            except Exception as e:
+                st.warning(f"Error leyendo {ruta}: {e}")
+    
+    return None
 
 def cargar_desde_github():
     """Carga archivos desde la carpeta 'datos/' de GitHub"""
