@@ -648,27 +648,29 @@ with st.expander("📁 Fuente de datos", expanded=True):
     
     with col1:
         st.markdown("### 📂 Datos desde GitHub")
-        if st.button("🔄 Recargar datos automáticos", use_container_width=True):
-         df_auto = cargar_archivos_desde_carpeta()
-    if df_auto is not None:
-        st.session_state.datos_cargados = df_auto
-        st.session_state.tipo_carga = "automática"
-        st.success(f"✅ Cargados {len(df_auto)} registros")
         
-        # 👇 AGREGAR ESTO PARA MOSTRAR DIAGNÓSTICO
-        with st.expander("📊 Vista previa de datos cargados", expanded=True):
-            st.write("**Primeras 5 filas:**")
-            st.dataframe(df_auto.head(5))
-            st.write("**Columnas encontradas:**", list(df_auto.columns))
-        
-        st.rerun()  
-        
+        # Mostrar archivos disponibles
         if os.path.exists("datos"):
             archivos = glob.glob("datos/*.xlsx")
             if archivos:
-                st.info(f"📄 Archivos disponibles: {len(archivos)}")
+                st.info(f"📄 Archivos en GitHub: {len(archivos)}")
                 for a in archivos[:5]:
                     st.caption(f"• {os.path.basename(a)}")
+            else:
+                st.warning("No hay archivos en la carpeta 'datos/'")
+        else:
+            st.warning("La carpeta 'datos/' no existe")
+        
+        if st.button("🔄 Recargar datos automáticos", use_container_width=True):
+            with st.spinner('Cargando archivos...'):
+                df_auto_temp = cargar_archivos_desde_carpeta()
+                if df_auto_temp is not None:
+                    st.session_state.datos_cargados = df_auto_temp
+                    st.session_state.tipo_carga = "automática"
+                    st.success(f"✅ Cargados {len(df_auto_temp)} registros")
+                    st.rerun()
+                else:
+                    st.error("❌ No se pudieron cargar los archivos")
     
     with col2:
         st.markdown("### 💻 Carga manual")
@@ -678,23 +680,24 @@ with st.expander("📁 Fuente de datos", expanded=True):
             accept_multiple_files=True,
             key="manual_upload"
         )
+        
+        if archivos_subidos:
+            with st.spinner('Procesando archivos manuales...'):
+                df_manual_temp, errores = procesar_archivos(archivos_subidos)
+                if df_manual_temp is not None:
+                    st.session_state.datos_cargados = df_manual_temp
+                    st.session_state.tipo_carga = "manual"
+                    st.success(f"✅ Cargados {len(df_manual_temp)} registros manualmente")
+                    st.rerun()
     
-    # =========================================================
-    # 👇 AGREGAR EL BOTÓN DE DIAGNÓSTICO AQUÍ (DESPUÉS de las columnas)
-    # =========================================================
-    
-    st.divider()  # Línea separadora opcional
-    
-    with st.expander("🔧 Diagnóstico de datos", expanded=False):
-        if st.button("📊 Ver información de los datos cargados", use_container_width=True):
-            if df_base is not None and not df_base.empty:
-                st.write("**Columnas disponibles:**")
-                st.write(list(df_base.columns))
-                st.write("**Primeras 3 filas:**")
-                st.dataframe(df_base.head(3))
-                st.write("**Tipos de datos:**")
-                st.write(df_base.dtypes)
-                st.write("**Total de registros:**", len(df_base))
+    # Diagnóstico
+    st.divider()
+    with st.expander("🔧 Diagnóstico", expanded=False):
+        if st.button("📊 Ver estado actual"):
+            if st.session_state.datos_cargados is not None:
+                st.write(f"**Registros:** {len(st.session_state.datos_cargados)}")
+                st.write(f"**Tipo carga:** {st.session_state.get('tipo_carga', 'N/A')}")
+                st.write(f"**Columnas:** {list(st.session_state.datos_cargados.columns)}")
             else:
                 st.warning("No hay datos cargados")
 
