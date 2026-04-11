@@ -10,6 +10,10 @@ from datetime import datetime
 from difflib import get_close_matches
 
 # =========================================================
+# ACTUALIZACIÓN: 11 de abril de 2026 - Corrección de gráficos
+# =========================================================
+
+# =========================================================
 # CONFIGURACIÓN DE LA PÁGINA
 # =========================================================
 st.set_page_config(page_title="Estación Pro - Reportes", layout="wide", page_icon="⛽")
