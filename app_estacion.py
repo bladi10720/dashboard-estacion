@@ -33,39 +33,7 @@ st.markdown("---")
 # CONFIGURACIÓN DE COMISIONES (Persistente)
 # =========================================================
 
-ARCHIVO_COMISIONES = "comisiones_guardadas.json"
 
-def cargar_comisiones():
-    
-    """Carga comisiones SOLO desde Excel y JSON"""
-    
-    comisiones = {}
-    
-    # 1. Cargar desde Excel
-    comisiones_excel = cargar_comisiones_desde_excel()
-    if comisiones_excel:
-        comisiones.update(comisiones_excel)
-        st.success(f"✅ Cargadas {len(comisiones_excel)} comisiones desde Excel")
-    else:
-        st.warning("⚠️ No se encontró el archivo COMISION.xlsx en la carpeta 'datos/'")
-    
-    # 2. Cargar desde JSON (sobrescribe Excel)
-    if os.path.exists(ARCHIVO_COMISIONES):
-        try:
-            with open(ARCHIVO_COMISIONES, 'r', encoding='utf-8') as f:
-                comisiones_guardadas = json.load(f)
-                for codigo, valor in comisiones_guardadas.items():
-                    comisiones[codigo] = valor
-            if comisiones_guardadas:
-                st.info(f"💾 Cargadas {len(comisiones_guardadas)} comisiones desde JSON")
-        except:
-            pass
-    
-    # 3. Verificar que hay comisiones
-    if not comisiones:
-        st.error("❌ No hay comisiones cargadas. Asegúrate de tener COMISION.xlsx en la carpeta 'datos/'")
-    
-    return comisiones
     
     
 
@@ -337,6 +305,39 @@ def cargar_comisiones_desde_excel():
                 st.warning(f"Error leyendo {ruta}: {e}")
     
     return None
+ARCHIVO_COMISIONES = "comisiones_guardadas.json"
+
+def cargar_comisiones():
+    
+    """Carga comisiones SOLO desde Excel y JSON"""
+    
+    comisiones = {}
+    
+    # 1. Cargar desde Excel
+    comisiones_excel = cargar_comisiones_desde_excel()
+    if comisiones_excel:
+        comisiones.update(comisiones_excel)
+        st.success(f"✅ Cargadas {len(comisiones_excel)} comisiones desde Excel")
+    else:
+        st.warning("⚠️ No se encontró el archivo COMISION.xlsx en la carpeta 'datos/'")
+    
+    # 2. Cargar desde JSON (sobrescribe Excel)
+    if os.path.exists(ARCHIVO_COMISIONES):
+        try:
+            with open(ARCHIVO_COMISIONES, 'r', encoding='utf-8') as f:
+                comisiones_guardadas = json.load(f)
+                for codigo, valor in comisiones_guardadas.items():
+                    comisiones[codigo] = valor
+            if comisiones_guardadas:
+                st.info(f"💾 Cargadas {len(comisiones_guardadas)} comisiones desde JSON")
+        except:
+            pass
+    
+    # 3. Verificar que hay comisiones
+    if not comisiones:
+        st.error("❌ No hay comisiones cargadas. Asegúrate de tener COMISION.xlsx en la carpeta 'datos/'")
+    
+    return comisiones
 
 def cargar_desde_github():
     """Carga archivos desde la carpeta 'datos/' de GitHub"""
