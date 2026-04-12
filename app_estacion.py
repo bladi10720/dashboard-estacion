@@ -259,18 +259,36 @@ def cargar_comisiones_desde_excel():
         # Leer el archivo
         df = pd.read_excel(ruta)
         
-        # MOSTRAR DIAGNÓSTICO (esto lo verás en la app)
+        # MOSTRAR DIAGNÓSTICO
         st.write("---")
         st.write("### 🔍 Diagnóstico de COMISION.xlsx")
-        st.write(f"**Número de filas:** {len(df)}")
         st.write(f"**Columnas encontradas:** {list(df.columns)}")
         st.write("**Primeras 5 filas:**")
         st.dataframe(df.head(5))
-        st.write("---")
         
-        # Tomar la primera columna como códigos y la segunda como comisiones
-        col_codigo = df.columns[0]
-        col_comision = df.columns[1]
+        # BUSCAR las columnas que tienen datos (no vacías)
+        col_codigo = None
+        col_comision = None
+        
+        for col in df.columns:
+            # Verificar si la columna tiene algún valor no vacío
+            if df[col].notna().any():
+                # Revisar el primer valor no vacío
+                primer_valor = df[col].dropna().iloc[0] if len(df[col].dropna()) > 0 else ""
+                primer_valor_str = str(primer_valor).upper()
+                
+                # Si parece un código (número o texto)
+                if col_codigo is None and (primer_valor_str.isdigit() or len(primer_valor_str) < 10):
+                    col_codigo = col
+                # Si parece una comisión (número)
+                elif col_comision is None and isinstance(primer_valor, (int, float)):
+                    col_comision = col
+        
+        # Si no encontró automáticamente, usar columnas 2 y 3 (índices 2 y 3)
+        if col_codigo is None and len(df.columns) > 2:
+            col_codigo = df.columns[2]
+        if col_comision is None and len(df.columns) > 3:
+            col_comision = df.columns[3]
         
         st.write(f"**Usando columna '{col_codigo}' para códigos**")
         st.write(f"**Usando columna '{col_comision}' para comisiones**")
@@ -278,28 +296,29 @@ def cargar_comisiones_desde_excel():
         comisiones = {}
         
         for idx, row in df.iterrows():
-            codigo = str(row[col_codigo]).strip()
-            comision = row[col_comision]
-            
-            # Mostrar algunas filas para ver qué está pasando
-            if idx < 5:
-                st.write(f"Fila {idx}: Código='{codigo}', Comisión={comision}")
-            
-            # Validar que no sea vacío
-            if pd.notna(codigo) and pd.notna(comision) and codigo != 'nan' and comision != 0:
-                try:
-                    comisiones[codigo] = float(comision)
-                except:
-                    pass
+            if col_codigo and col_comision:
+                codigo = str(row[col_codigo]).strip()
+                comision = row[col_comision]
+                
+                # Mostrar algunas filas
+                if idx < 5:
+                    st.write(f"Fila {idx}: Código='{codigo}', Comisión={comision}")
+                
+                # Validar
+                if pd.notna(codigo) and pd.notna(comision) and codigo != 'nan' and comision != 0:
+                    try:
+                        comisiones[codigo] = float(comision)
+                    except:
+                        pass
         
         st.write(f"**Total de comisiones válidas encontradas:** {len(comisiones)}")
+        st.write("---")
         
         if comisiones:
             st.success(f"✅ Cargadas {len(comisiones)} comisiones desde Excel")
             return comisiones
         else:
             st.warning("⚠️ No se encontraron comisiones válidas en el archivo")
-            st.info("💡 Asegúrate de que las columnas tengan: CÓDIGOS en la primera columna y COMISIONES en la segunda columna")
             return {}
             
     except Exception as e:
