@@ -8,6 +8,10 @@ import os
 import glob
 from datetime import datetime
 from difflib import get_close_matches
+# CONVERTIR VALORES
+def convertir_a_string(valores):
+    """Convierte cualquier valor a string de forma segura"""
+    return sorted([str(v) for v in valores if pd.notna(v)])
 
 # =========================================================
 # ACTUALIZACIÓN: 11 de abril de 2026 - Corrección de gráficos
@@ -519,8 +523,7 @@ if df_base is not None and not df_base.empty:
         
         with f2:
             if 'Nombre Cajero' in df_base.columns:
-                # Convertir a string para evitar error con floats
-                vendedores_opciones = sorted(df_base['Nombre Cajero'].astype(str).unique())
+                vendedores_opciones = convertir_a_string(df_base['Nombre Cajero'].unique())
                 vendedores = st.multiselect(
                     "👤 Vendedor:", 
                     vendedores_opciones,
@@ -531,7 +534,7 @@ if df_base is not None and not df_base.empty:
         
         with f3:
             if 'Producto_Info' in df_base.columns:
-                productos_opciones = sorted(df_base['Producto_Info'].astype(str).unique())
+                productos_opciones = convertir_a_string(df_base['Producto_Info'].unique())
                 productos = st.multiselect(
                     "🛒 Producto:", 
                     productos_opciones,
@@ -542,7 +545,7 @@ if df_base is not None and not df_base.empty:
         
         with f4:
             if 'MOP1' in df_base.columns:
-                medios_opciones = sorted(df_base['MOP1'].dropna().astype(str).unique())
+                medios_opciones = convertir_a_string(df_base['MOP1'].dropna().unique())
                 if medios_opciones:
                     medios = st.multiselect(
                         "💳 Método de Pago:", 
@@ -553,7 +556,6 @@ if df_base is not None and not df_base.empty:
                     medios = []
             else:
                 medios = []
-    
     # =========================================================
     # APLICAR FILTROS
     # =========================================================
