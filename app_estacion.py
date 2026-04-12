@@ -523,159 +523,58 @@ if df_base is not None and not df_base.empty:
     
     # =========================================================
     # FILTROS DINÁMICOS
-    # =========================================================  
+    # =========================================================
     with st.expander("🔍 Filtros Avanzados", expanded=True):
-       f1, f2, f3, f4 = st.columns(4)
-    
-    with f1:
-        if 'Fecha' in df_base.columns:
-            fecha_min = df_base['Fecha'].min()
-            fecha_max = df_base['Fecha'].max()
-            rango = st.date_input(
-                "📅 Periodo:", 
-                [fecha_min, fecha_max],
-                min_value=fecha_min,
-                max_value=fecha_max
-            )
-        else:
-            rango = []
-    
-    with f2:
-        # Verificar que la columna existe
-        if 'Nombre Cajero' in df_base.columns:
-            st.markdown("**👤 Vendedor**")
-            # Limpiar datos nulos y convertir a string
-            vendedores_limpios = df_base['Nombre Cajero'].dropna().astype(str)
-            if len(vendedores_limpios) > 0:
-                vendedores_opciones = sorted(vendedores_limpios.unique())
-                
-                # Inicializar estado
-                if 'vendedores_seleccionados' not in st.session_state:
-                    st.session_state.vendedores_seleccionados = vendedores_opciones.copy()
-                
-                # Botones en columnas
-                cols = st.columns(3)
-                for i, vendedor in enumerate(vendedores_opciones):
-                    col_idx = i % 3
-                    with cols[col_idx]:
-                        if vendedor in st.session_state.vendedores_seleccionados:
-                            if st.button(f"✅ {vendedor}", key=f"ven_{i}", use_container_width=True):
-                                st.session_state.vendedores_seleccionados.remove(vendedor)
-                                st.rerun()
-                        else:
-                            if st.button(f"⬜ {vendedor}", key=f"ven_{i}", use_container_width=True):
-                                st.session_state.vendedores_seleccionados.append(vendedor)
-                                st.rerun()
-                
-                # Botones rápidos
-                st.markdown("---")
-                col_a1, col_a2, col_a3 = st.columns(3)
-                with col_a1:
-                    if st.button("✅ Todos", key="todos_v", use_container_width=True):
-                        st.session_state.vendedores_seleccionados = vendedores_opciones.copy()
-                        st.rerun()
-                with col_a2:
-                    if st.button("❌ Ninguno", key="ninguno_v", use_container_width=True):
-                        st.session_state.vendedores_seleccionados = []
-                        st.rerun()
-                with col_a3:
-                    if st.button("🔄 Invertir", key="invertir_v", use_container_width=True):
-                        st.session_state.vendedores_seleccionados = [v for v in vendedores_opciones if v not in st.session_state.vendedores_seleccionados]
-                        st.rerun()
-                
-                vendedores = st.session_state.vendedores_seleccionados
-                st.caption(f"✅ {len(vendedores)} vendedor(es) seleccionado(s)")
+        f1, f2, f3, f4 = st.columns(4)
+        
+        with f1:
+            if 'Fecha' in df_base.columns:
+                fecha_min = df_base['Fecha'].min()
+                fecha_max = df_base['Fecha'].max()
+                rango = st.date_input(
+                    "📅 Periodo:", 
+                    [fecha_min, fecha_max],
+                    min_value=fecha_min,
+                    max_value=fecha_max
+                )
+            else:
+                rango = []
+        
+        with f2:
+            if 'Nombre Cajero' in df_base.columns:
+                vendedores_opciones = convertir_a_string(df_base['Nombre Cajero'].unique())
+                vendedores = st.multiselect(
+                    "👤 Vendedor:", 
+                    vendedores_opciones,
+                    default=vendedores_opciones
+                )
             else:
                 vendedores = []
-                st.info("No hay datos de vendedores")
-        else:
-            vendedores = []
-            st.info("No hay columna 'Nombre Cajero' en los datos")
-    
-    with f3:
-        if 'Producto_Info' in df_base.columns:
-            st.markdown("**🛒 Producto**")
-            productos_opciones = sorted(df_base['Producto_Info'].astype(str).unique())
-            
-            if 'productos_seleccionados' not in st.session_state:
-                st.session_state.productos_seleccionados = productos_opciones.copy()
-            
-            # Mostrar solo primeros 20 productos (para no saturar)
-            productos_mostrar = productos_opciones[:20]
-            if len(productos_opciones) > 20:
-                st.caption(f"📌 Mostrando 20 de {len(productos_opciones)} productos")
-            
-            cols = st.columns(2)
-            for i, producto in enumerate(productos_mostrar):
-                col_idx = i % 2
-                nombre_mostrar = producto[:25] + "..." if len(producto) > 25 else producto
-                
-                with cols[col_idx]:
-                    if producto in st.session_state.productos_seleccionados:
-                        if st.button(f"✅ {nombre_mostrar}", key=f"prod_{i}", use_container_width=True):
-                            st.session_state.productos_seleccionados.remove(producto)
-                            st.rerun()
-                    else:
-                        if st.button(f"⬜ {nombre_mostrar}", key=f"prod_{i}", use_container_width=True):
-                            st.session_state.productos_seleccionados.append(producto)
-                            st.rerun()
-            
-            st.markdown("---")
-            col_a1, col_a2, col_a3 = st.columns(3)
-            with col_a1:
-                if st.button("✅ Todos", key="todos_p", use_container_width=True):
-                    st.session_state.productos_seleccionados = productos_opciones.copy()
-                    st.rerun()
-            with col_a2:
-                if st.button("❌ Ninguno", key="ninguno_p", use_container_width=True):
-                    st.session_state.productos_seleccionados = []
-                    st.rerun()
-            with col_a3:
-                if st.button("🔄 Invertir", key="invertir_p", use_container_width=True):
-                    st.session_state.productos_seleccionados = [p for p in productos_opciones if p not in st.session_state.productos_seleccionados]
-                    st.rerun()
-            
-            productos = st.session_state.productos_seleccionados
-            st.caption(f"✅ {len(productos)} producto(s) seleccionado(s)")
-        else:
-            productos = []
-    
-    with f4:
-        if 'MOP1' in df_base.columns:
-            st.markdown("**💳 Método de Pago**")
-            medios_opciones = sorted(df_base['MOP1'].dropna().astype(str).unique())
-            
-            if medios_opciones:
-                if 'medios_seleccionados' not in st.session_state:
-                    st.session_state.medios_seleccionados = medios_opciones.copy()
-                
-                for i, medio in enumerate(medios_opciones):
-                    if medio in st.session_state.medios_seleccionados:
-                        if st.button(f"✅ {medio}", key=f"med_{i}", use_container_width=True):
-                            st.session_state.medios_seleccionados.remove(medio)
-                            st.rerun()
-                    else:
-                        if st.button(f"⬜ {medio}", key=f"med_{i}", use_container_width=True):
-                            st.session_state.medios_seleccionados.append(medio)
-                            st.rerun()
-                
-                st.markdown("---")
-                col_a1, col_a2 = st.columns(2)
-                with col_a1:
-                    if st.button("✅ Todos", key="todos_m", use_container_width=True):
-                        st.session_state.medios_seleccionados = medios_opciones.copy()
-                        st.rerun()
-                with col_a2:
-                    if st.button("❌ Ninguno", key="ninguno_m", use_container_width=True):
-                        st.session_state.medios_seleccionados = []
-                        st.rerun()
-                
-                medios = st.session_state.medios_seleccionados
-                st.caption(f"✅ {len(medios)} método(s) seleccionado(s)")
+        
+        with f3:
+            if 'Producto_Info' in df_base.columns:
+                productos_opciones = convertir_a_string(df_base['Producto_Info'].unique())
+                productos = st.multiselect(
+                    "🛒 Producto:", 
+                    productos_opciones,
+                    default=productos_opciones
+                )
+            else:
+                productos = []
+        
+        with f4:
+            if 'MOP1' in df_base.columns:
+                medios_opciones = convertir_a_string(df_base['MOP1'].dropna().unique())
+                if medios_opciones:
+                    medios = st.multiselect(
+                        "💳 Método de Pago:", 
+                        medios_opciones,
+                        default=medios_opciones
+                    )
+                else:
+                    medios = []
             else:
                 medios = []
-        else:
-            medios = []
     # =========================================================
     # APLICAR FILTROS
     # =========================================================
