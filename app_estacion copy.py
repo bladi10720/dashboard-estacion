@@ -75,34 +75,27 @@ def buscar_comision_por_palabras_clave(nombre_producto, palabras_clave):
     return None
 
 def calcular_comision_segura(fila, tabla_comisiones, palabras_clave):
-    """Calcula comisión con múltiples estrategias de búsqueda"""
+    """Calcula comisión buscando primero por código, luego por nombre"""
     try:
         cantidad = fila.get('Cantidad', 0)
         if pd.isna(cantidad) or cantidad <= 0:
             return 0.0
         
-        codigo = normalizar_texto(fila.get('cod Producto', ''))
-        nombre = normalizar_texto(fila.get('Descripcion', ''))
-        
-        # Estrategia 1: Por código
+        # 1. BUSCAR POR CÓDIGO (prioridad máxima)
+        codigo = normalizar_texto(fila.get('Cod Producto', ''))
         if codigo and codigo in tabla_comisiones:
             return float(cantidad) * tabla_comisiones[codigo]
         
-        # Estrategia 2: Por nombre exacto
+        # 2. BUSCAR POR NOMBRE
+        nombre = normalizar_texto(fila.get('Descripcion', ''))
         if nombre and nombre in tabla_comisiones:
             return float(cantidad) * tabla_comisiones[nombre]
         
-        # Estrategia 3: Por similitud
+        # 3. BUSCAR POR PALABRAS CLAVE
         if nombre:
-            comision_simil = buscar_comision_por_similitud(nombre, tabla_comisiones)
-            if comision_simil:
-                return float(cantidad) * comision_simil
-        
-        # Estrategia 4: Por palabras clave
-        if nombre:
-            comision_palabra = buscar_comision_por_palabras_clave(nombre, palabras_clave)
-            if comision_palabra:
-                return float(cantidad) * comision_palabra
+            for palabra, comision in palabras_clave.items():
+                if palabra in nombre:
+                    return float(cantidad) * comision
         
         return 0.0
         
@@ -191,7 +184,7 @@ def exportar_reporte(df):
 
 def procesar_archivos(lista_archivos):
     """Procesa archivos subidos manualmente"""
-    columnas_posibles = ['Fecha', 'Hora', 'cod Producto', 'Descripcion', 
+    columnas_posibles = ['Fecha', 'Hora', 'Cod Producto', 'Descripcion', 
                         'Cantidad', 'Valor', 'Nombre Cajero', 'MOP1']
     lista_df = []
     errores = []
@@ -244,68 +237,94 @@ def procesar_archivos(lista_archivos):
 def cargar_comisiones_desde_excel():
     """Carga las comisiones desde el archivo COMISION.xlsx"""
     
-    # Buscar el archivo en diferentes ubicaciones
-    rutas_posibles = ["datos/COMISION.xlsx", "COMISION.xlsx"]
+    # Verificar si la carpeta datos existe
+    if not os.path.exists("datos"):
+        st.error("❌ La carpeta 'datos/' no existe")
+        return {}
     
-    for ruta in rutas_posibles:
-        if os.path.exists(ruta):
-            try:
-                df = pd.read_excel(ruta)
-                comisiones = {}
-                
-                # Buscar columnas de código y comisión
-                col_codigo = None
-                col_comision = None
-                
-                for col in df.columns:
-                    col_str = str(col).upper()
-                    if 'CODIGO' in col_str or 'COD' in col_str or 'CÓDIGO' in col_str:
-                        col_codigo = col
-                    if 'COMISION' in col_str or 'COMISIÓN' in col_str:
-                        col_comision = col
-                
-                if col_codigo and col_comision:
-                    for _, row in df.iterrows():
-                        codigo = str(row[col_codigo]).strip()
-                        comision = row[col_comision]
-                        if pd.notna(codigo) and pd.notna(comision) and comision != 0:
-                            comisiones[codigo] = float(comision)
-                    
-                    if comisiones:
-                        return comisiones
-            except Exception as e:
-                st.warning(f"Error leyendo {ruta}: {e}")
+    # Verificar si COMISION.xlsx está en la carpeta
+    ruta = "datos/COMISION.xlsx"
+    if not os.path.exists(ruta):
+        st.error("❌ No se encontró el archivo COMISION.xlsx en la carpeta 'datos/'")
+        return {}
     
-    return None
+    try:
+        # Leer el archivo
+        df = pd.read_excel(ruta)
+        
+        # MOSTRAR DIAGNÓSTICO
+        st.write("---")
+        st.write("### 🔍 Diagnóstico de COMISION.xlsx")
+        st.write(f"**Columnas encontradas:** {list(df.columns)}")
+        st.write("**Primeras 5 filas:**")
+        st.dataframe(df.head(5))
+        
+        # BUSCAR las columnas que tienen datos (no vacías)
+        col_codigo = None
+        col_comision = None
+        
+        for col in df.columns:
+            # Verificar si la columna tiene algún valor no vacío
+            if df[col].notna().any():
+                # Revisar el primer valor no vacío
+                primer_valor = df[col].dropna().iloc[0] if len(df[col].dropna()) > 0 else ""
+                primer_valor_str = str(primer_valor).upper()
+                
+                # Si parece un código (número o texto)
+                if col_codigo is None and (primer_valor_str.isdigit() or len(primer_valor_str) < 10):
+                    col_codigo = col
+                # Si parece una comisión (número)
+                elif col_comision is None and isinstance(primer_valor, (int, float)):
+                    col_comision = col
+        
+        # Si no encontró automáticamente, usar columnas 2 y 3 (índices 2 y 3)
+        if col_codigo is None and len(df.columns) > 2:
+            col_codigo = df.columns[2]
+        if col_comision is None and len(df.columns) > 3:
+            col_comision = df.columns[3]
+        
+        st.write(f"**Usando columna '{col_codigo}' para códigos**")
+        st.write(f"**Usando columna '{col_comision}' para comisiones**")
+        
+        comisiones = {}
+        
+        for idx, row in df.iterrows():
+            if col_codigo and col_comision:
+                codigo = str(row[col_codigo]).strip()
+                comision = row[col_comision]
+                
+                # Mostrar algunas filas
+                if idx < 5:
+                    st.write(f"Fila {idx}: Código='{codigo}', Comisión={comision}")
+                
+                # Validar
+                if pd.notna(codigo) and pd.notna(comision) and codigo != 'nan' and comision != 0:
+                    try:
+                        comisiones[codigo] = float(comision)
+                    except:
+                        pass
+        
+        st.write(f"**Total de comisiones válidas encontradas:** {len(comisiones)}")
+        st.write("---")
+        
+        if comisiones:
+            st.success(f"✅ Cargadas {len(comisiones)} comisiones desde Excel")
+            return comisiones
+        else:
+            st.warning("⚠️ No se encontraron comisiones válidas en el archivo")
+            return {}
+            
+    except Exception as e:
+        st.error(f"❌ Error al leer el archivo: {e}")
+        return {}
 
 def cargar_comisiones():
-    """Carga comisiones SOLO desde Excel y JSON"""
+    """Carga comisiones SOLO desde Excel"""
     
-    comisiones = {}
+    comisiones = cargar_comisiones_desde_excel()
     
-    # 1. Cargar desde Excel
-    comisiones_excel = cargar_comisiones_desde_excel()
-    if comisiones_excel:
-        comisiones.update(comisiones_excel)
-        st.success(f"✅ Cargadas {len(comisiones_excel)} comisiones desde Excel")
-    else:
-        st.warning("⚠️ No se encontró el archivo COMISION.xlsx en la carpeta 'datos/'")
-    
-    # 2. Cargar desde JSON (sobrescribe Excel)
-    if os.path.exists(ARCHIVO_COMISIONES):
-        try:
-            with open(ARCHIVO_COMISIONES, 'r', encoding='utf-8') as f:
-                comisiones_guardadas = json.load(f)
-                for codigo, valor in comisiones_guardadas.items():
-                    comisiones[codigo] = valor
-            if comisiones_guardadas:
-                st.info(f"💾 Cargadas {len(comisiones_guardadas)} comisiones desde JSON")
-        except:
-            pass
-    
-    # 3. Verificar que hay comisiones
     if not comisiones:
-        st.error("❌ No hay comisiones cargadas. Asegúrate de tener COMISION.xlsx en la carpeta 'datos/'")
+        st.error("❌ No se pudieron cargar las comisiones. Verifica el archivo COMISION.xlsx")
     
     return comisiones
 
@@ -490,12 +509,12 @@ elif st.session_state.datos_github is not None:
 
 if df_base is not None and not df_base.empty:
     # Limpiar y preparar datos
-    if 'cod Producto' in df_base.columns:
-        df_base['cod Producto'] = df_base['cod Producto'].astype(str).str.strip()
+    if 'Cod Producto' in df_base.columns:
+        df_base['Cod Producto'] = df_base['Cod Producto'].astype(str).str.strip()
     df_base['Descripcion'] = df_base['Descripcion'].astype(str).str.strip()
     
-    if 'cod Producto' in df_base.columns:
-        df_base['Producto_Info'] = df_base['cod Producto'] + " - " + df_base['Descripcion']
+    if 'Cod Producto' in df_base.columns:
+        df_base['Producto_Info'] = df_base['Cod Producto'] + " - " + df_base['Descripcion']
     else:
         df_base['Producto_Info'] = df_base['Descripcion']
     
