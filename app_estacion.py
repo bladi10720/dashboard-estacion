@@ -184,7 +184,7 @@ def exportar_reporte(df):
 
 def procesar_archivos(lista_archivos):
     """Procesa archivos subidos manualmente"""
-    columnas_posibles = ['Fecha', 'Hora', 'cod Producto', 'Descripcion', 
+    columnas_posibles = ['Fecha', 'Hora', 'Cod Producto', 'Descripcion', 
                         'Cantidad', 'Valor', 'Nombre Cajero', 'MOP1']
     lista_df = []
     errores = []
@@ -509,11 +509,11 @@ elif st.session_state.datos_github is not None:
 
 if df_base is not None and not df_base.empty:
     # Limpiar y preparar datos
-    if 'cod Producto' in df_base.columns:
+    if 'Cod Producto' in df_base.columns:
         df_base['cod Producto'] = df_base['cod Producto'].astype(str).str.strip()
     df_base['Descripcion'] = df_base['Descripcion'].astype(str).str.strip()
     
-    if 'cod Producto' in df_base.columns:
+    if 'Cod Producto' in df_base.columns:
         df_base['Producto_Info'] = df_base['cod Producto'] + " - " + df_base['Descripcion']
     else:
         df_base['Producto_Info'] = df_base['Descripcion']
