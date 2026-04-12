@@ -33,35 +33,8 @@ st.markdown("---")
 # CONFIGURACIÓN DE COMISIONES (Persistente)
 # =========================================================
 
+ARCHIVO_COMISIONES = "comisiones_guardadas.json"
 
-    
-    
-
-def guardar_comisiones(comisiones):
-    """Guarda las comisiones en un archivo JSON"""
-    try:
-        with open(ARCHIVO_COMISIONES, 'w', encoding='utf-8') as f:
-            json.dump(comisiones, f, ensure_ascii=False, indent=2)
-        return True
-    except Exception as e:
-        st.error(f"Error al guardar comisiones: {e}")
-        return False
-
-# Inicializar estado
-if 'TABLA_COMISIONES' not in st.session_state:
-    st.session_state.TABLA_COMISIONES = cargar_comisiones()
-
-if 'datos_github' not in st.session_state:
-    st.session_state.datos_github = None
-
-# Palabras clave para búsqueda flexible
-PALABRAS_CLAVE_COMISIONES = {
-    'BIDON': 5000.0,
-    'BIDON 20': 5000.0,
-    '20 LT': 5000.0,
-    '20L': 5000.0,
-    'COMB GAS': 5000.0,
-}
 # =========================================================
 # FUNCIONES DE UTILIDAD
 # =========================================================
@@ -211,9 +184,6 @@ def exportar_reporte(df):
             top_productos.to_excel(writer, sheet_name='Top Productos')
     
     return output.getvalue()
-# =========================================================
-# PROCESAMIENTO DE ARCHIVOS
-# =========================================================
 
 def procesar_archivos(lista_archivos):
     """Procesa archivos subidos manualmente"""
@@ -266,8 +236,6 @@ def procesar_archivos(lista_archivos):
     if lista_df:
         return pd.concat(lista_df, ignore_index=True), errores
     return None, errores
-# 👇 AGREGAR LA NUEVA FUNCIÓN AQUÍ
-# =========================================================
 
 def cargar_comisiones_desde_excel():
     """Carga las comisiones desde el archivo COMISION.xlsx"""
@@ -305,10 +273,8 @@ def cargar_comisiones_desde_excel():
                 st.warning(f"Error leyendo {ruta}: {e}")
     
     return None
-ARCHIVO_COMISIONES = "comisiones_guardadas.json"
 
 def cargar_comisiones():
-    
     """Carga comisiones SOLO desde Excel y JSON"""
     
     comisiones = {}
@@ -338,6 +304,16 @@ def cargar_comisiones():
         st.error("❌ No hay comisiones cargadas. Asegúrate de tener COMISION.xlsx en la carpeta 'datos/'")
     
     return comisiones
+
+def guardar_comisiones(comisiones):
+    """Guarda las comisiones en un archivo JSON"""
+    try:
+        with open(ARCHIVO_COMISIONES, 'w', encoding='utf-8') as f:
+            json.dump(comisiones, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        st.error(f"Error al guardar comisiones: {e}")
+        return False
 
 def cargar_desde_github():
     """Carga archivos desde la carpeta 'datos/' de GitHub"""
@@ -426,7 +402,27 @@ def interfaz_gestion_comisiones():
                 for k, v in st.session_state.TABLA_COMISIONES.items()
             ])
             st.dataframe(df_comisiones, use_container_width=True, height=300)
- # =========================================================
+
+# =========================================================
+# INICIALIZAR ESTADO (después de todas las funciones)
+# =========================================================
+
+if 'TABLA_COMISIONES' not in st.session_state:
+    st.session_state.TABLA_COMISIONES = cargar_comisiones()
+
+if 'datos_github' not in st.session_state:
+    st.session_state.datos_github = None
+
+# Palabras clave para búsqueda flexible
+PALABRAS_CLAVE_COMISIONES = {
+    'BIDON': 5000.0,
+    'BIDON 20': 5000.0,
+    '20 LT': 5000.0,
+    '20L': 5000.0,
+    'COMB GAS': 5000.0,
+}
+
+# =========================================================
 # INTERFAZ PRINCIPAL - CARGA DE DATOS
 # =========================================================
 
@@ -695,4 +691,4 @@ st.markdown(
     "Las comisiones se guardan automáticamente"
     "</div>",
     unsafe_allow_html=True
-)           
+)        
