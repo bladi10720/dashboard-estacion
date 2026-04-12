@@ -541,79 +541,85 @@ if df_base is not None and not df_base.empty:
             rango = []
     
     with f2:
+        # Verificar que la columna existe
         if 'Nombre Cajero' in df_base.columns:
             st.markdown("**👤 Vendedor**")
-            vendedores_opciones = sorted(df_base['Nombre Cajero'].astype(str).unique())
-            
-            # Inicializar estado de selección
-            if 'vendedores_seleccionados' not in st.session_state:
-                st.session_state.vendedores_seleccionados = vendedores_opciones.copy()
-            
-            # Crear botones en columnas (3 por fila)
-            cols = st.columns(3)
-            for i, vendedor in enumerate(vendedores_opciones):
-                col_idx = i % 3
-                with cols[col_idx]:
-                    # Botón con estilo diferente si está seleccionado
-                    if vendedor in st.session_state.vendedores_seleccionados:
-                        # Botón resaltado (seleccionado)
-                        if st.button(f"✅ {vendedor}", key=f"ven_{vendedor}", use_container_width=True):
-                            st.session_state.vendedores_seleccionados.remove(vendedor)
-                            st.rerun()
-                    else:
-                        # Botón normal (no seleccionado)
-                        if st.button(f"⬜ {vendedor}", key=f"ven_{vendedor}", use_container_width=True):
-                            st.session_state.vendedores_seleccionados.append(vendedor)
-                            st.rerun()
-            
-            # Botones de acción rápida
-            st.markdown("---")
-            col_a1, col_a2, col_a3 = st.columns(3)
-            with col_a1:
-                if st.button("✅ Todos", key="todos_v", use_container_width=True):
+            # Limpiar datos nulos y convertir a string
+            vendedores_limpios = df_base['Nombre Cajero'].dropna().astype(str)
+            if len(vendedores_limpios) > 0:
+                vendedores_opciones = sorted(vendedores_limpios.unique())
+                
+                # Inicializar estado
+                if 'vendedores_seleccionados' not in st.session_state:
                     st.session_state.vendedores_seleccionados = vendedores_opciones.copy()
-                    st.rerun()
-            with col_a2:
-                if st.button("❌ Ninguno", key="ninguno_v", use_container_width=True):
-                    st.session_state.vendedores_seleccionados = []
-                    st.rerun()
-            with col_a3:
-                if st.button("🔄 Invertir", key="invertir_v", use_container_width=True):
-                    st.session_state.vendedores_seleccionados = [v for v in vendedores_opciones if v not in st.session_state.vendedores_seleccionados]
-                    st.rerun()
-            
-            vendedores = st.session_state.vendedores_seleccionados
-            st.caption(f"✅ {len(vendedores)} vendedor(es) seleccionado(s)")
+                
+                # Botones en columnas
+                cols = st.columns(3)
+                for i, vendedor in enumerate(vendedores_opciones):
+                    col_idx = i % 3
+                    with cols[col_idx]:
+                        if vendedor in st.session_state.vendedores_seleccionados:
+                            if st.button(f"✅ {vendedor}", key=f"ven_{i}", use_container_width=True):
+                                st.session_state.vendedores_seleccionados.remove(vendedor)
+                                st.rerun()
+                        else:
+                            if st.button(f"⬜ {vendedor}", key=f"ven_{i}", use_container_width=True):
+                                st.session_state.vendedores_seleccionados.append(vendedor)
+                                st.rerun()
+                
+                # Botones rápidos
+                st.markdown("---")
+                col_a1, col_a2, col_a3 = st.columns(3)
+                with col_a1:
+                    if st.button("✅ Todos", key="todos_v", use_container_width=True):
+                        st.session_state.vendedores_seleccionados = vendedores_opciones.copy()
+                        st.rerun()
+                with col_a2:
+                    if st.button("❌ Ninguno", key="ninguno_v", use_container_width=True):
+                        st.session_state.vendedores_seleccionados = []
+                        st.rerun()
+                with col_a3:
+                    if st.button("🔄 Invertir", key="invertir_v", use_container_width=True):
+                        st.session_state.vendedores_seleccionados = [v for v in vendedores_opciones if v not in st.session_state.vendedores_seleccionados]
+                        st.rerun()
+                
+                vendedores = st.session_state.vendedores_seleccionados
+                st.caption(f"✅ {len(vendedores)} vendedor(es) seleccionado(s)")
+            else:
+                vendedores = []
+                st.info("No hay datos de vendedores")
         else:
             vendedores = []
+            st.info("No hay columna 'Nombre Cajero' en los datos")
     
     with f3:
         if 'Producto_Info' in df_base.columns:
             st.markdown("**🛒 Producto**")
             productos_opciones = sorted(df_base['Producto_Info'].astype(str).unique())
             
-            # Inicializar estado de selección
             if 'productos_seleccionados' not in st.session_state:
                 st.session_state.productos_seleccionados = productos_opciones.copy()
             
-            # Crear botones en columnas (2 por fila para productos)
+            # Mostrar solo primeros 20 productos (para no saturar)
+            productos_mostrar = productos_opciones[:20]
+            if len(productos_opciones) > 20:
+                st.caption(f"📌 Mostrando 20 de {len(productos_opciones)} productos")
+            
             cols = st.columns(2)
-            for i, producto in enumerate(productos_opciones):
+            for i, producto in enumerate(productos_mostrar):
                 col_idx = i % 2
-                # Acortar nombre del producto si es muy largo
-                nombre_mostrar = producto[:30] + "..." if len(producto) > 30 else producto
+                nombre_mostrar = producto[:25] + "..." if len(producto) > 25 else producto
                 
                 with cols[col_idx]:
                     if producto in st.session_state.productos_seleccionados:
-                        if st.button(f"✅ {nombre_mostrar}", key=f"prod_{producto[:20]}", use_container_width=True):
+                        if st.button(f"✅ {nombre_mostrar}", key=f"prod_{i}", use_container_width=True):
                             st.session_state.productos_seleccionados.remove(producto)
                             st.rerun()
                     else:
-                        if st.button(f"⬜ {nombre_mostrar}", key=f"prod_{producto[:20]}", use_container_width=True):
+                        if st.button(f"⬜ {nombre_mostrar}", key=f"prod_{i}", use_container_width=True):
                             st.session_state.productos_seleccionados.append(producto)
                             st.rerun()
             
-            # Botones de acción rápida
             st.markdown("---")
             col_a1, col_a2, col_a3 = st.columns(3)
             with col_a1:
@@ -640,24 +646,21 @@ if df_base is not None and not df_base.empty:
             medios_opciones = sorted(df_base['MOP1'].dropna().astype(str).unique())
             
             if medios_opciones:
-                # Inicializar estado de selección
                 if 'medios_seleccionados' not in st.session_state:
                     st.session_state.medios_seleccionados = medios_opciones.copy()
                 
-                # Crear botones en columna vertical
-                for medio in medios_opciones:
+                for i, medio in enumerate(medios_opciones):
                     if medio in st.session_state.medios_seleccionados:
-                        if st.button(f"✅ {medio}", key=f"med_{medio}", use_container_width=True):
+                        if st.button(f"✅ {medio}", key=f"med_{i}", use_container_width=True):
                             st.session_state.medios_seleccionados.remove(medio)
                             st.rerun()
                     else:
-                        if st.button(f"⬜ {medio}", key=f"med_{medio}", use_container_width=True):
+                        if st.button(f"⬜ {medio}", key=f"med_{i}", use_container_width=True):
                             st.session_state.medios_seleccionados.append(medio)
                             st.rerun()
                 
-                # Botones de acción rápida
                 st.markdown("---")
-                col_a1, col_a2, col_a3 = st.columns(3)
+                col_a1, col_a2 = st.columns(2)
                 with col_a1:
                     if st.button("✅ Todos", key="todos_m", use_container_width=True):
                         st.session_state.medios_seleccionados = medios_opciones.copy()
