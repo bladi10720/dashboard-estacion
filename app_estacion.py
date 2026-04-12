@@ -82,7 +82,7 @@ def calcular_comision_segura(fila, tabla_comisiones, palabras_clave):
             return 0.0
         
         # 1. BUSCAR POR CÓDIGO (prioridad máxima)
-        codigo = normalizar_texto(fila.get('cod Producto', ''))
+        codigo = normalizar_texto(fila.get('Cod Producto', ''))
         if codigo and codigo in tabla_comisiones:
             return float(cantidad) * tabla_comisiones[codigo]
         
