@@ -521,7 +521,7 @@ if df_base is not None and not df_base.empty:
             if 'Nombre Cajero' in df_base.columns:
                 vendedores = st.multiselect(
                     "👤 Vendedor:", 
-                    sorted(df_base['Nombre Cajero'].unique()),
+                    sorted(df_base['Nombre Cajero'].astype(str).unique()),
                     default=sorted(df_base['Nombre Cajero'].unique())
                 )
             else:
