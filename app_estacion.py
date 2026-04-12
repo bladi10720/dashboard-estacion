@@ -36,8 +36,7 @@ st.markdown("---")
 ARCHIVO_COMISIONES = "comisiones_guardadas.json"
 
 def cargar_comisiones():
-    """Carga las comisiones desde un archivo JSON"""
-def cargar_comisiones():
+    
     """Carga comisiones SOLO desde Excel y JSON"""
     
     comisiones = {}
