@@ -244,68 +244,56 @@ def procesar_archivos(lista_archivos):
 def cargar_comisiones_desde_excel():
     """Carga las comisiones desde el archivo COMISION.xlsx"""
     
-    # Buscar el archivo en diferentes ubicaciones
-    rutas_posibles = ["datos/COMISION.xlsx", "COMISION.xlsx"]
+    # Verificar si la carpeta datos existe
+    if not os.path.exists("datos"):
+        st.error("❌ La carpeta 'datos/' no existe")
+        return {}
     
-    for ruta in rutas_posibles:
-        if os.path.exists(ruta):
-            try:
-                df = pd.read_excel(ruta)
-                comisiones = {}
-                
-                # Buscar columnas de código y comisión
-                col_codigo = None
-                col_comision = None
-                
-                for col in df.columns:
-                    col_str = str(col).upper()
-                    if 'CODIGO' in col_str or 'COD' in col_str or 'CÓDIGO' in col_str:
-                        col_codigo = col
-                    if 'COMISION' in col_str or 'COMISIÓN' in col_str:
-                        col_comision = col
-                
-                if col_codigo and col_comision:
-                    for _, row in df.iterrows():
-                        codigo = str(row[col_codigo]).strip()
-                        comision = row[col_comision]
-                        if pd.notna(codigo) and pd.notna(comision) and comision != 0:
-                            comisiones[codigo] = float(comision)
-                    
-                    if comisiones:
-                        return comisiones
-            except Exception as e:
-                st.warning(f"Error leyendo {ruta}: {e}")
+    # Verificar si COMISION.xlsx está en la carpeta
+    ruta = "datos/COMISION.xlsx"
+    if not os.path.exists(ruta):
+        st.error("❌ No se encontró el archivo COMISION.xlsx en la carpeta 'datos/'")
+        return {}
     
-    return None
+    try:
+        # Leer el archivo
+        df = pd.read_excel(ruta)
+        
+        # La primera columna es códigos, la segunda es comisiones
+        col_codigo = df.columns[0]
+        col_comision = df.columns[1]
+        
+        comisiones = {}
+        
+        for _, row in df.iterrows():
+            codigo = str(row[col_codigo]).strip()
+            comision = row[col_comision]
+            
+            # Validar que no sea vacío
+            if pd.notna(codigo) and pd.notna(comision) and codigo != 'nan' and comision != 0:
+                try:
+                    comisiones[codigo] = float(comision)
+                except:
+                    pass
+        
+        if comisiones:
+            st.success(f"✅ Cargadas {len(comisiones)} comisiones desde Excel")
+            return comisiones
+        else:
+            st.warning("⚠️ No se encontraron comisiones válidas en el archivo")
+            return {}
+            
+    except Exception as e:
+        st.error(f"❌ Error al leer el archivo: {e}")
+        return {}
 
 def cargar_comisiones():
-    """Carga comisiones SOLO desde Excel y JSON"""
+    """Carga comisiones SOLO desde Excel"""
     
-    comisiones = {}
+    comisiones = cargar_comisiones_desde_excel()
     
-    # 1. Cargar desde Excel
-    comisiones_excel = cargar_comisiones_desde_excel()
-    if comisiones_excel:
-        comisiones.update(comisiones_excel)
-        st.success(f"✅ Cargadas {len(comisiones_excel)} comisiones desde Excel")
-    else:
-        st.warning("⚠️ No se encontró el archivo COMISION.xlsx en la carpeta 'datos/'")
-    
-    # 2. Cargar desde JSON (sobrescribe Excel)
-    if os.path.exists(ARCHIVO_COMISIONES):
-        try:
-            with open(ARCHIVO_COMISIONES, 'r', encoding='utf-8') as f:
-                comisiones_guardadas = json.load(f)
-                for codigo, valor in comisiones_guardadas.items():
-                    comisiones[codigo] = valor
-            if comisiones_guardadas:
-                st.info(f"💾 Cargadas {len(comisiones_guardadas)} comisiones desde JSON")
-        except:
-            pass
-    
-    # 3. Verificar que hay comisiones
     if not comisiones:
-        st.error("❌ No hay comisiones cargadas. Asegúrate de tener COMISION.xlsx en la carpeta 'datos/'")
+        st.error("❌ No se pudieron cargar las comisiones. Verifica el archivo COMISION.xlsx")
     
     return comisiones
 
