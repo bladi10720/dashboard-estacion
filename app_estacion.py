@@ -519,27 +519,30 @@ if df_base is not None and not df_base.empty:
         
         with f2:
             if 'Nombre Cajero' in df_base.columns:
+                # Convertir a string para evitar error con floats
+                vendedores_opciones = sorted(df_base['Nombre Cajero'].astype(str).unique())
                 vendedores = st.multiselect(
                     "👤 Vendedor:", 
-                    sorted(df_base['Nombre Cajero'].astype(str).unique()),
-                    default=sorted(df_base['Nombre Cajero'].astype(str).unique())
+                    vendedores_opciones,
+                    default=vendedores_opciones
                 )
             else:
                 vendedores = []
         
         with f3:
             if 'Producto_Info' in df_base.columns:
+                productos_opciones = sorted(df_base['Producto_Info'].astype(str).unique())
                 productos = st.multiselect(
                     "🛒 Producto:", 
-                    sorted(df_base['Producto_Info'].unique()),
-                    default=sorted(df_base['Producto_Info'].unique())
+                    productos_opciones,
+                    default=productos_opciones
                 )
             else:
                 productos = []
         
         with f4:
             if 'MOP1' in df_base.columns:
-                medios_opciones = sorted(df_base['MOP1'].dropna().unique())
+                medios_opciones = sorted(df_base['MOP1'].dropna().astype(str).unique())
                 if medios_opciones:
                     medios = st.multiselect(
                         "💳 Método de Pago:", 
