@@ -75,34 +75,27 @@ def buscar_comision_por_palabras_clave(nombre_producto, palabras_clave):
     return None
 
 def calcular_comision_segura(fila, tabla_comisiones, palabras_clave):
-    """Calcula comisión con múltiples estrategias de búsqueda"""
+    """Calcula comisión buscando primero por código, luego por nombre"""
     try:
         cantidad = fila.get('Cantidad', 0)
         if pd.isna(cantidad) or cantidad <= 0:
             return 0.0
         
+        # 1. BUSCAR POR CÓDIGO (prioridad máxima)
         codigo = normalizar_texto(fila.get('cod Producto', ''))
-        nombre = normalizar_texto(fila.get('Descripcion', ''))
-        
-        # Estrategia 1: Por código
         if codigo and codigo in tabla_comisiones:
             return float(cantidad) * tabla_comisiones[codigo]
         
-        # Estrategia 2: Por nombre exacto
+        # 2. BUSCAR POR NOMBRE
+        nombre = normalizar_texto(fila.get('Descripcion', ''))
         if nombre and nombre in tabla_comisiones:
             return float(cantidad) * tabla_comisiones[nombre]
         
-        # Estrategia 3: Por similitud
+        # 3. BUSCAR POR PALABRAS CLAVE
         if nombre:
-            comision_simil = buscar_comision_por_similitud(nombre, tabla_comisiones)
-            if comision_simil:
-                return float(cantidad) * comision_simil
-        
-        # Estrategia 4: Por palabras clave
-        if nombre:
-            comision_palabra = buscar_comision_por_palabras_clave(nombre, palabras_clave)
-            if comision_palabra:
-                return float(cantidad) * comision_palabra
+            for palabra, comision in palabras_clave.items():
+                if palabra in nombre:
+                    return float(cantidad) * comision
         
         return 0.0
         
