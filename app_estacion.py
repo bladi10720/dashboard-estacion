@@ -728,138 +728,25 @@ if df_base is not None and not df_base.empty:
                     rango = []
         
         with f3:
-            # -------------------------
-            # 🛒 PRODUCTOS (UX mejorada)
-            # -------------------------
             if 'Producto_Info' in df_base.columns:
-                # Todas las opciones (orden alfabético)
-                productos_series = df_base['Producto_Info'].dropna().astype(str).str.strip()
-                productos_all = sorted(convertir_a_string(productos_series.unique()), key=lambda x: x.lower())
-
-                # Top 20 más usados (sugerencias)
-                top20 = productos_series.value_counts().head(20).index.tolist()
-                top20 = [str(x).strip() for x in top20 if pd.notna(x)]
-
-                # Búsqueda rápida
-                st.markdown("**🛒 Productos**")
-                if len(productos_all) > 80:
-                    st.caption(f"Escribe para buscar entre los **{len(productos_all)}** productos.")
-                q_prod = st.text_input(
-                    "Búsqueda rápida de producto",
-                    value=st.session_state.get("filtro_busqueda_producto", ""),
-                    placeholder="Ej: GAS, BIDON, 95, 97…",
-                    key="filtro_busqueda_producto",
-                    label_visibility="collapsed",
-                )
-
-                # Botones rápidos
-                b1, b2 = st.columns(2)
-                with b1:
-                    if st.button("Seleccionar todos", use_container_width=True, key="btn_prod_all"):
-                        st.session_state.productos_seleccionados = list(productos_all)
-                        st.rerun()
-                with b2:
-                    if st.button("Limpiar", use_container_width=True, key="btn_prod_clear"):
-                        st.session_state.productos_seleccionados = []
-                        st.rerun()
-
-                # Filtrar por búsqueda (sin complejidad)
-                if q_prod and q_prod.strip():
-                    qn = normalizar_texto(q_prod).replace(" ", "")
-                    productos_filtrados = [p for p in productos_all if qn in normalizar_texto(p).replace(" ", "")]
-                else:
-                    productos_filtrados = productos_all
-
-                # Orden: sugerencias primero (top 20), luego el resto alfabético
-                top20_set = set(top20)
-                sugerencias = [p for p in top20 if p in productos_filtrados]
-                resto = [p for p in productos_filtrados if p not in top20_set]
-                productos_opciones = sugerencias + resto
-
-                # Persistencia de selección
-                if "productos_seleccionados" not in st.session_state:
-                    st.session_state.productos_seleccionados = list(productos_all)
-
-                # Validación: no permitir vacío
-                default_prod = [p for p in st.session_state.productos_seleccionados if p in productos_opciones]
-                if not default_prod and productos_opciones:
-                    default_prod = list(productos_opciones)
-
+                productos_opciones = convertir_a_string(df_base['Producto_Info'].unique())
                 productos = st.multiselect(
-                    "🛒 Producto:",
-                    options=productos_opciones,
-                    default=default_prod,
-                    help="Sugerencias: los 20 productos más usados aparecen primero.",
+                    "🛒 Producto:", 
+                    productos_opciones,
+                    default=productos_opciones
                 )
-
-                st.session_state.productos_seleccionados = list(productos)
-                if len(productos) == 0 and len(productos_all) > 0:
-                    st.warning("Selecciona al menos un producto. Se restauró la selección completa.")
-                    st.session_state.productos_seleccionados = list(productos_all)
-                    productos = list(productos_all)
-                    st.rerun()
             else:
                 productos = []
-
+        
         with f4:
-            # ------------------------------
-            # 💳 MÉTODOS DE PAGO (UX mejorada)
-            # ------------------------------
             if 'MOP1' in df_base.columns:
-                mop_series = df_base['MOP1'].dropna().astype(str).str.strip()
-                if len(mop_series) > 0:
-                    freq = mop_series.value_counts()
-                    medios_all = freq.index.tolist()  # ya ordenado por frecuencia
-
-                    def _icono_mop(nombre: str):
-                        n = normalizar_texto(nombre)
-                        if "EFECTIVO" in n or "CASH" in n:
-                            return "💵"
-                        if "TARJ" in n or "CRED" in n or "DEB" in n or "VISA" in n or "MAST" in n:
-                            return "💳"
-                        if "TRANSF" in n or "TRANSFER" in n or "BANCO" in n:
-                            return "🏦"
-                        return "💳"
-
-                    medios_labels = {m: f"{_icono_mop(m)} {m}" for m in medios_all}
-                    medios_opciones = [medios_labels[m] for m in medios_all]
-
-                    st.markdown("**💳 Métodos de pago**")
-                    b1, b2 = st.columns(2)
-                    with b1:
-                        if st.button("Seleccionar todos", use_container_width=True, key="btn_mop_all"):
-                            st.session_state.medios_seleccionados = list(medios_all)
-                            st.rerun()
-                    with b2:
-                        if st.button("Limpiar", use_container_width=True, key="btn_mop_clear"):
-                            st.session_state.medios_seleccionados = []
-                            st.rerun()
-
-                    if "medios_seleccionados" not in st.session_state:
-                        st.session_state.medios_seleccionados = list(medios_all)
-
-                    # Defaults mapeados a labels
-                    default_medios = [medios_labels[m] for m in st.session_state.medios_seleccionados if m in medios_labels]
-                    if not default_medios and len(medios_opciones) > 0:
-                        default_medios = list(medios_opciones)
-
-                    medios_labels_sel = st.multiselect(
-                        "💳 Método de Pago:",
-                        options=medios_opciones,
-                        default=default_medios,
-                        help="Ordenados por uso (frecuencia).",
+                medios_opciones = convertir_a_string(df_base['MOP1'].dropna().unique())
+                if medios_opciones:
+                    medios = st.multiselect(
+                        "💳 Método de Pago:", 
+                        medios_opciones,
+                        default=medios_opciones
                     )
-
-                    # Convertir labels seleccionados a valores originales (compatibilidad con filtro existente)
-                    inv = {v: k for k, v in medios_labels.items()}
-                    medios = [inv[x] for x in medios_labels_sel if x in inv]
-
-                    st.session_state.medios_seleccionados = list(medios)
-                    if len(medios) == 0 and len(medios_all) > 0:
-                        st.warning("Selecciona al menos un método de pago. Se restauró la selección completa.")
-                        st.session_state.medios_seleccionados = list(medios_all)
-                        medios = list(medios_all)
-                        st.rerun()
                 else:
                     medios = []
             else:
@@ -1017,7 +904,7 @@ elif archivos_subidos is None and st.session_state.datos_github is None:
         - ✅ Cálculo automático de comisiones
         - ✅ Filtros dinámicos (fecha, vendedor, producto, método de pago)
         - ✅ Gráficos interactivos
-  )        - ✅ Exportación a Excel
+        - ✅ Exportación a Excel
         - ✅ Manejo robusto de errores
         - ✅ Detección flexible de productos
         - ✅ Gestión de comisiones integrada
@@ -1033,5 +920,4 @@ st.markdown(
     "Las comisiones se guardan automáticamente"
     "</div>",
     unsafe_allow_html=True
-)    
-      
+)        
