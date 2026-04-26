@@ -1,3 +1,154 @@
+  Actúa como un desarrollador senior experto en Python, Streamlit, UX/UI y dashboards interactivos.
+
+
+
+Tengo un proyecto llamado "dashboard-estacion" con la siguiente estructura:
+
+
+
+* Archivos Excel en carpeta "datos" (ventas por mes: febrero, marzo, etc.)
+
+* Un archivo principal "app_estacion.py"
+
+* Un archivo JSON "comisiones_guardadas.json"
+
+* Ya existe lógica funcional para:
+
+
+
+  * cargar múltiples archivos Excel
+
+  * procesar ventas
+
+  * calcular comisiones por empleado
+
+  * guardar resultados
+
+
+
+IMPORTANTE:
+
+❌ NO modificar la lógica existente
+
+❌ NO cambiar nombres de columnas
+
+❌ NO alterar cómo se calculan las comisiones
+
+❌ NO romper compatibilidad con los archivos Excel actuales
+
+❌ NO eliminar funciones existentes
+
+
+
+OBJETIVO:
+
+Mejorar únicamente la interfaz visual (UI) y experiencia de usuario (UX) para que el dashboard se vea moderno, profesional y tipo empresa (similar a Power BI o Tableau).
+
+
+
+CAMBIOS ESPECÍFICOS:
+
+
+
+1. Reemplazar cualquier selectbox de vendedores por un selector visual tipo tarjetas:
+
+
+
+   * Mostrar máximo 10 vendedores como botones en grid
+
+   * Usar st.columns para layout
+
+   * Usar st.session_state para manejar la selección
+
+   * Al seleccionar un vendedor, TODO el dashboard debe actualizarse dinámicamente
+
+
+
+2. Crear una sección de KPIs visuales (tipo tarjetas) usando st.metric:
+
+
+
+   * Ventas totales del vendedor seleccionado
+
+   * Total de comisiones
+
+   * Número de ventas o transacciones
+
+   * Ticket promedio
+
+
+
+3. Implementar filtro por mes basado en los archivos Excel:
+
+
+
+   * Permitir seleccionar el mes (ej: febrero, marzo)
+
+   * Filtrar todos los datos según el mes seleccionado
+
+
+
+4. Mejorar gráficos usando Plotly:
+
+
+
+   * Gráfico de ventas por día (línea)
+
+   * Gráfico de ventas por producto (barras)
+
+   * Ranking de vendedores del mes (barras horizontales)
+
+   * Todos los gráficos deben ser interactivos
+
+
+
+5. Mejorar la estructura visual del dashboard:
+
+
+
+   * Título principal claro
+
+   * Separar secciones: filtros, KPIs, gráficos, tabla
+
+   * Usar st.container y st.columns
+
+   * Diseño limpio, moderno y profesional
+
+
+
+6. Mantener compatibilidad con dispositivos móviles
+
+
+
+7. Opcional:
+
+
+
+   * Aplicar estilo visual (colores, espaciado, tipografía)
+
+   * Mejorar experiencia visual general sin usar librerías externas complejas
+
+
+
+ENTREGA:
+
+
+
+* Devuélveme el archivo completo app_estacion.py listo para copiar y pegar
+
+* NO modificar la lógica existente, solo reorganizar y mejorar la UI
+
+* Explica brevemente qué partes visuales fueron mejoradas
+
+* Asegúrate de que el código funcione con múltiples archivos Excel en la carpeta "datos"
+
+
+
+Aquí está mi código actual
+
+app_estacion.py (completo, listo para copiar/pegar)
+Copia y pega este archivo completo reemplazando el tuyo.
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -12,37 +163,34 @@ from difflib import get_close_matches
 def convertir_a_string(valores):
     """Convierte cualquier valor a string de forma segura"""
     return sorted([str(v) for v in valores if pd.notna(v)])
-
 # =========================================================
 # ACTUALIZACIÓN: 11 de abril de 2026 - Corrección de gráficos
 # =========================================================
-
 # =========================================================
 # CONFIGURACIÓN DE LA PÁGINA
 # =========================================================
 st.set_page_config(page_title="Estación Pro - Reportes", layout="wide", page_icon="⛽")
-
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
     [data-testid="stMetricValue"] { font-size: 28px; color: #004b87; }
     .stButton button { background-color: #004b87; color: white; }
+    .block-container { padding-top: 1.2rem; padding-bottom: 2rem; }
+    [data-testid="stHorizontalBlock"] { gap: 1rem; }
     </style>
     """, unsafe_allow_html=True)
-
-st.title("⛽ Sistema de Gestión de Ventas - Estación Pro")
-st.markdown("---")
-
+top = st.container()
+with top:
+    st.title("⛽ Estación Pro · Dashboard de Ventas y Comisiones")
+    st.caption("Interfaz optimizada tipo empresa (Power BI / Tableau) · Datos desde carpeta `datos/` o carga manual")
+    st.divider()
 # =========================================================
 # CONFIGURACIÓN DE COMISIONES (Persistente)
 # =========================================================
-
 ARCHIVO_COMISIONES = "comisiones_guardadas.json"
-
 # =========================================================
 # FUNCIONES DE UTILIDAD
 # =========================================================
-
 def normalizar_texto(texto):
     """Normaliza texto para búsqueda"""
     if pd.isna(texto) or texto is None:
@@ -51,7 +199,6 @@ def normalizar_texto(texto):
     texto = re.sub(r'\s+', ' ', texto)
     texto = re.sub(r'[°\-_/\\|]', ' ', texto)
     return texto.strip()
-
 def buscar_comision_por_similitud(nombre_producto, tabla_comisiones, umbral=0.8):
     """Busca comisión usando similitud de texto (fuzzy matching)"""
     if not nombre_producto:
@@ -63,7 +210,6 @@ def buscar_comision_por_similitud(nombre_producto, tabla_comisiones, umbral=0.8)
     if matches:
         return tabla_comisiones[matches[0]]
     return None
-
 def buscar_comision_por_palabras_clave(nombre_producto, palabras_clave):
     """Busca comisión usando palabras clave"""
     if not nombre_producto:
@@ -73,7 +219,6 @@ def buscar_comision_por_palabras_clave(nombre_producto, palabras_clave):
         if palabra in nombre_producto:
             return comision
     return None
-
 def calcular_comision_segura(fila, tabla_comisiones, palabras_clave):
     """Calcula comisión buscando primero por código, luego por nombre"""
     try:
@@ -101,7 +246,6 @@ def calcular_comision_segura(fila, tabla_comisiones, palabras_clave):
         
     except Exception as e:
         return 0.0
-
 def mostrar_metricas(df):
     """Muestra métricas principales"""
     col1, col2, col3, col4 = st.columns(4)
@@ -117,42 +261,62 @@ def mostrar_metricas(df):
     
     with col4:
         st.metric("📊 N° de Ventas", f"{len(df):,}")
-
 def crear_graficos(df):
     """Crea gráficos interactivos"""
-    tab1, tab2, tab3 = st.tabs(["📊 Por Hora", "📈 Tendencia", "🥧 Por Producto"])
-    
-    with tab1:
-        if 'Hora' in df.columns:
-            df['Hora_H'] = df['Hora'].astype(str).str[:2]
-            ventas_hora = df.groupby('Hora_H')['Valor'].sum().reset_index()
-            fig = px.bar(ventas_hora, x='Hora_H', y='Valor', 
-                        title="Ventas por Hora",
-                        color_discrete_sequence=['#004b87'])
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No hay datos de hora para mostrar")
-    
-    with tab2:
+    col_g1, col_g2 = st.columns([2, 1])
+    with col_g1:
+        st.subheader("📈 Ventas por día")
         if len(df) > 1 and 'Fecha' in df.columns:
-            ventas_dia = df.groupby('Fecha')['Valor'].sum().reset_index()
-            fig = px.line(ventas_dia, x='Fecha', y='Valor',
-                         title="Evolución de Ventas", markers=True)
+            ventas_dia = df.groupby('Fecha', as_index=False)['Valor'].sum()
+            fig = px.line(
+                ventas_dia,
+                x='Fecha',
+                y='Valor',
+                markers=True,
+                title=None,
+                color_discrete_sequence=['#004b87']
+            )
+            fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), hovermode="x unified")
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("No hay suficientes datos para la tendencia")
-    
-    with tab3:
-        if 'Descripcion' in df.columns:
-            top_productos = df.groupby('Descripcion')['Valor'].sum().nlargest(10)
-            if len(top_productos) > 0:
-                fig = px.pie(values=top_productos.values, 
-                            names=top_productos.index,
-                            title="Top 10 Productos por Ventas")
+            st.info("No hay suficientes datos para ventas por día.")
+    with col_g2:
+        st.subheader("🏆 Ranking vendedores (mes)")
+        if 'Nombre Cajero' in df.columns:
+            ranking = df.groupby('Nombre Cajero', as_index=False)['Valor'].sum().sort_values('Valor', ascending=False).head(15)
+            if not ranking.empty:
+                fig = px.bar(
+                    ranking.sort_values('Valor', ascending=True),
+                    x='Valor',
+                    y='Nombre Cajero',
+                    orientation='h',
+                    title=None,
+                    color_discrete_sequence=['#1f77b4']
+                )
+                fig.update_layout(margin=dict(l=10, r=10, t=10, b=10))
                 st.plotly_chart(fig, use_container_width=True)
             else:
-                st.info("No hay datos de productos")
-
+                st.info("No hay ranking para mostrar.")
+        else:
+            st.info("No hay columna de vendedor para ranking.")
+    st.subheader("📊 Ventas por producto")
+    if 'Descripcion' in df.columns:
+        top_prod = df.groupby('Descripcion', as_index=False)['Valor'].sum().sort_values('Valor', ascending=False).head(20)
+        if not top_prod.empty:
+            fig = px.bar(
+                top_prod,
+                x='Descripcion',
+                y='Valor',
+                title=None,
+                color_discrete_sequence=['#004b87']
+            )
+            fig.update_layout(margin=dict(l=10, r=10, t=10, b=10))
+            fig.update_xaxes(tickangle=35)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No hay ventas por producto para mostrar.")
+    else:
+        st.info("No hay columna de producto para mostrar.")
 def exportar_reporte(df):
     """Exporta el reporte a Excel con múltiples hojas"""
     output = io.BytesIO()
@@ -181,7 +345,6 @@ def exportar_reporte(df):
             top_productos.to_excel(writer, sheet_name='Top Productos')
     
     return output.getvalue()
-
 def procesar_archivos(lista_archivos):
     """Procesa archivos subidos manualmente"""
     columnas_posibles = ['Fecha', 'Hora', 'Cod Producto', 'Descripcion', 
@@ -233,7 +396,6 @@ def procesar_archivos(lista_archivos):
     if lista_df:
         return pd.concat(lista_df, ignore_index=True), errores
     return None, errores
-
 def cargar_comisiones_desde_excel():
     """Carga las comisiones desde el archivo COMISION.xlsx"""
     
@@ -317,7 +479,6 @@ def cargar_comisiones_desde_excel():
     except Exception as e:
         st.error(f"❌ Error al leer el archivo: {e}")
         return {}
-
 def cargar_comisiones():
     """Carga comisiones SOLO desde Excel"""
     
@@ -327,7 +488,6 @@ def cargar_comisiones():
         st.error("❌ No se pudieron cargar las comisiones. Verifica el archivo COMISION.xlsx")
     
     return comisiones
-
 def guardar_comisiones(comisiones):
     """Guarda las comisiones en un archivo JSON"""
     try:
@@ -337,7 +497,6 @@ def guardar_comisiones(comisiones):
     except Exception as e:
         st.error(f"Error al guardar comisiones: {e}")
         return False
-
 def cargar_desde_github():
     """Carga archivos desde la carpeta 'datos/' de GitHub"""
     if not os.path.exists("datos"):
@@ -369,7 +528,6 @@ def cargar_desde_github():
     if lista_df:
         return pd.concat(lista_df, ignore_index=True)
     return None
-
 def interfaz_gestion_comisiones():
     """Interfaz para gestionar comisiones"""
     with st.expander("⚙️ Gestión de Comisiones", expanded=False):
@@ -425,17 +583,114 @@ def interfaz_gestion_comisiones():
                 for k, v in st.session_state.TABLA_COMISIONES.items()
             ])
             st.dataframe(df_comisiones, use_container_width=True, height=300)
-
+# =========================================================
+# UI/UX helpers (sin tocar lógica de negocio)
+# =========================================================
+MESES_ES = {
+    1: "enero",
+    2: "febrero",
+    3: "marzo",
+    4: "abril",
+    5: "mayo",
+    6: "junio",
+    7: "julio",
+    8: "agosto",
+    9: "septiembre",
+    10: "octubre",
+    11: "noviembre",
+    12: "diciembre",
+}
+def _extraer_mes_desde_nombre_archivo(nombre_archivo: str):
+    """Intenta inferir el mes (1-12) desde el nombre del Excel."""
+    if not nombre_archivo:
+        return None
+    base = os.path.splitext(os.path.basename(str(nombre_archivo)))[0]
+    txt = normalizar_texto(base)
+    txt = txt.replace(" ", "")
+    # Buscar coincidencias por nombre (ES) primero
+    for m_num, m_name in MESES_ES.items():
+        if normalizar_texto(m_name).replace(" ", "") in txt:
+            return m_num
+    # Buscar patrón numérico tipo 02, 2, 2026-02, etc.
+    match = re.search(r'(?<!\d)(0?[1-9]|1[0-2])(?!\d)', txt)
+    if match:
+        try:
+            m = int(match.group(1))
+            if 1 <= m <= 12:
+                return m
+        except Exception:
+            return None
+    return None
+def _mes_num_a_label(mes_num: int):
+    if mes_num in MESES_ES:
+        return MESES_ES[mes_num].capitalize()
+    return "Todos"
+def _render_selector_vendedores_cards(vendedores_opciones, max_cards=10):
+    """Selector visual por tarjetas (buttons) con estado."""
+    if 'vendedor_seleccionado' not in st.session_state:
+        st.session_state.vendedor_seleccionado = "Todos"
+    # Normalizar opciones
+    vendedores_opciones = [v for v in vendedores_opciones if v and str(v).strip()]
+    vendedores_opciones = convertir_a_string(vendedores_opciones)
+    # Búsqueda para no limitar la selección real a 10
+    busqueda = st.text_input("Buscar vendedor", value="", placeholder="Escribe para filtrar…")
+    if busqueda.strip():
+        b = normalizar_texto(busqueda).replace(" ", "")
+        filtrados = []
+        for v in vendedores_opciones:
+            vn = normalizar_texto(v).replace(" ", "")
+            if b in vn:
+                filtrados.append(v)
+        vendors_for_cards = filtrados[:max_cards]
+    else:
+        vendors_for_cards = vendedores_opciones[:max_cards]
+    # Tarjetas en grid
+    cols = st.columns(5)  # responsive-ish; en móvil se apila
+    def _btn_label(v):
+        selected = (st.session_state.vendedor_seleccionado == v)
+        return f"✅ {v}" if selected else v
+    # Botón "Todos" siempre visible
+    with cols[0]:
+        if st.button(_btn_label("Todos"), use_container_width=True, key="vend_card_todos"):
+            st.session_state.vendedor_seleccionado = "Todos"
+            st.rerun()
+    # Resto de tarjetas (máx. 10)
+    for i, v in enumerate(vendors_for_cards):
+        col = cols[(i + 1) % 5]
+        with col:
+            if st.button(_btn_label(v), use_container_width=True, key=f"vend_card_{i}_{v}"):
+                st.session_state.vendedor_seleccionado = v
+                st.rerun()
+    # Estado actual
+    st.caption(f"Seleccionado: **{st.session_state.vendedor_seleccionado}**")
+def _kpis_vendedor(df, vendedor_seleccionado: str):
+    """KPIs para vendedor seleccionado (usa df ya filtrado por mes/fecha/producto/medio)."""
+    if df is None or df.empty:
+        return
+    if vendedor_seleccionado and vendedor_seleccionado != "Todos" and 'Nombre Cajero' in df.columns:
+        df_kpi = df[df['Nombre Cajero'] == vendedor_seleccionado]
+    else:
+        df_kpi = df
+    total_ventas = float(df_kpi['Valor'].sum()) if 'Valor' in df_kpi.columns else 0.0
+    total_comisiones = float(df_kpi['Pago_Comision'].sum()) if 'Pago_Comision' in df_kpi.columns else 0.0
+    n_ventas = int(len(df_kpi))
+    ticket_prom = (total_ventas / n_ventas) if n_ventas > 0 else 0.0
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.metric("Ventas (selección)", f"${total_ventas:,.0f}")
+    with c2:
+        st.metric("Comisiones", f"${total_comisiones:,.0f}")
+    with c3:
+        st.metric("Transacciones", f"{n_ventas:,}")
+    with c4:
+        st.metric("Ticket promedio", f"${ticket_prom:,.0f}")
 # =========================================================
 # INICIALIZAR ESTADO (después de todas las funciones)
 # =========================================================
-
 if 'TABLA_COMISIONES' not in st.session_state:
     st.session_state.TABLA_COMISIONES = cargar_comisiones()
-
 if 'datos_github' not in st.session_state:
     st.session_state.datos_github = None
-
 # Palabras clave para búsqueda flexible
 PALABRAS_CLAVE_COMISIONES = {
     'BIDON': 5000.0,
@@ -444,11 +699,9 @@ PALABRAS_CLAVE_COMISIONES = {
     '20L': 5000.0,
     'COMB GAS': 5000.0,
 }
-
 # =========================================================
 # INTERFAZ PRINCIPAL - CARGA DE DATOS
 # =========================================================
-
 with st.expander("📁 Fuente de Datos", expanded=True):
     col1, col2 = st.columns(2)
     
@@ -483,13 +736,10 @@ with st.expander("📁 Fuente de Datos", expanded=True):
             accept_multiple_files=True,
             help="Puedes seleccionar uno o varios archivos"
         )
-
 # =========================================================
 # SELECCIONAR FUENTE DE DATOS
 # =========================================================
-
 df_base = None
-
 if archivos_subidos:
     with st.spinner('Procesando archivos manuales...'):
         df_base, errores = procesar_archivos(archivos_subidos)
@@ -502,11 +752,9 @@ if archivos_subidos:
 elif st.session_state.datos_github is not None:
     df_base = st.session_state.datos_github
     st.info(f"📊 Usando datos de GitHub ({len(df_base)} registros)")
-
 # =========================================================
 # PROCESAR Y MOSTRAR DATOS
 # =========================================================
-
 if df_base is not None and not df_base.empty:
     # Limpiar y preparar datos
     if 'Cod Producto' in df_base.columns:
@@ -524,32 +772,60 @@ if df_base is not None and not df_base.empty:
     # =========================================================
     # FILTROS DINÁMICOS
     # =========================================================
-    with st.expander("🔍 Filtros Avanzados", expanded=True):
-        f1, f2, f3, f4 = st.columns(4)
-        
-        with f1:
-            if 'Fecha' in df_base.columns:
-                fecha_min = df_base['Fecha'].min()
-                fecha_max = df_base['Fecha'].max()
-                rango = st.date_input(
-                    "📅 Periodo:", 
-                    [fecha_min, fecha_max],
-                    min_value=fecha_min,
-                    max_value=fecha_max
+    filtros = st.container()
+    with filtros:
+        st.subheader("🔎 Filtros")
+        with st.expander("Ajustar filtros", expanded=True):
+            f0, f1, f3, f4 = st.columns([1, 2, 2, 2])
+            
+            with f0:
+                # Filtro por mes (basado en archivos Excel y/o fechas)
+                meses_detectados = set()
+                if archivos_subidos:
+                    for a in archivos_subidos:
+                        m = _extraer_mes_desde_nombre_archivo(getattr(a, "name", ""))
+                        if m:
+                            meses_detectados.add(m)
+                else:
+                    if os.path.exists("datos"):
+                        for p in glob.glob("datos/*.xlsx"):
+                            if os.path.basename(p).upper() == "COMISION.XLSX":
+                                continue
+                            m = _extraer_mes_desde_nombre_archivo(p)
+                            if m:
+                                meses_detectados.add(m)
+                
+                # Fallback si no hay meses por nombre: usar meses presentes en Fecha
+                if 'Fecha' in df_base.columns:
+                    try:
+                        meses_en_datos = set(int(m) for m in df_base['Fecha'].dropna().dt.month.unique())
+                        meses_detectados |= meses_en_datos
+                    except Exception:
+                        pass
+                
+                opciones_mes = ["Todos"] + [_mes_num_a_label(m) for m in sorted(meses_detectados)]
+                if 'mes_seleccionado' not in st.session_state:
+                    st.session_state.mes_seleccionado = "Todos"
+                
+                mes_sel = st.selectbox(
+                    "Mes",
+                    options=opciones_mes if opciones_mes else ["Todos"],
+                    index=(opciones_mes.index(st.session_state.mes_seleccionado) if st.session_state.mes_seleccionado in opciones_mes else 0),
                 )
-            else:
-                rango = []
-        
-        with f2:
-            if 'Nombre Cajero' in df_base.columns:
-                vendedores_opciones = convertir_a_string(df_base['Nombre Cajero'].unique())
-                vendedores = st.multiselect(
-                    "👤 Vendedor:", 
-                    vendedores_opciones,
-                    default=vendedores_opciones
-                )
-            else:
-                vendedores = []
+                st.session_state.mes_seleccionado = mes_sel
+            
+            with f1:
+                if 'Fecha' in df_base.columns:
+                    fecha_min = df_base['Fecha'].min()
+                    fecha_max = df_base['Fecha'].max()
+                    rango = st.date_input(
+                        "📅 Periodo:",
+                        [fecha_min, fecha_max],
+                        min_value=fecha_min,
+                        max_value=fecha_max
+                    )
+                else:
+                    rango = []
         
         with f3:
             if 'Producto_Info' in df_base.columns:
@@ -575,17 +851,38 @@ if df_base is not None and not df_base.empty:
                     medios = []
             else:
                 medios = []
+        # Selector de vendedor tipo tarjetas (reemplaza selectores de vendedor)
+        if 'Nombre Cajero' in df_base.columns:
+            st.markdown("#### 👤 Vendedor (tarjetas)")
+            _render_selector_vendedores_cards(df_base['Nombre Cajero'].unique(), max_cards=10)
+        else:
+            st.info("No hay columna de vendedor para seleccionar.")
     # =========================================================
     # APLICAR FILTROS
     # =========================================================
     mask = pd.Series([True] * len(df_base))
     
+    # Filtro por mes (si hay fecha)
+    if 'Fecha' in df_base.columns and st.session_state.get("mes_seleccionado", "Todos") != "Todos":
+        try:
+            mes_label = st.session_state.mes_seleccionado.strip().lower()
+            mes_num = None
+            for m, name in MESES_ES.items():
+                if name == mes_label:
+                    mes_num = m
+                    break
+            if mes_num:
+                mask &= (df_base['Fecha'].dt.month == mes_num)
+        except Exception:
+            pass
+    
     if 'rango' in locals() and len(rango) == 2:
         mask &= (df_base['Fecha'] >= pd.Timestamp(rango[0])) & \
                 (df_base['Fecha'] <= pd.Timestamp(rango[1]))
     
-    if 'vendedores' in locals() and vendedores:
-        mask &= df_base['Nombre Cajero'].isin(vendedores)
+    vendedor_sel = st.session_state.get("vendedor_seleccionado", "Todos")
+    if vendedor_sel and vendedor_sel != "Todos" and 'Nombre Cajero' in df_base.columns:
+        mask &= (df_base['Nombre Cajero'] == vendedor_sel)
     
     if 'productos' in locals() and productos:
         mask &= df_base['Producto_Info'].isin(productos)
@@ -614,14 +911,19 @@ if df_base is not None and not df_base.empty:
             )
         
         st.success(f"✅ Mostrando {len(df_filtrado):,} registros")
-        st.markdown("---")
-        
-        # Métricas principales
-        mostrar_metricas(df_filtrado)
-        st.markdown("---")
-        
-        # Gráficos
-        crear_graficos(df_filtrado)
+        st.divider()
+        # KPIs (tipo tarjetas) para vendedor seleccionado
+        kpi_section = st.container()
+        with kpi_section:
+            st.subheader("📌 KPIs")
+            _kpis_vendedor(df_filtrado, st.session_state.get("vendedor_seleccionado", "Todos"))
+            st.caption("Los KPIs reflejan los filtros activos (mes, periodo, producto, método de pago y vendedor).")
+        st.divider()
+        # Gráficos interactivos (Plotly)
+        charts = st.container()
+        with charts:
+            st.subheader("📊 Análisis")
+            crear_graficos(df_filtrado)
         
         # Resumen por vendedor
         with st.expander("💰 Resumen de Liquidación por Cajero", expanded=True):
@@ -688,7 +990,6 @@ if df_base is not None and not df_base.empty:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
-
 elif archivos_subidos is None and st.session_state.datos_github is None:
     st.info("👋 **Bienvenido al Sistema de Gestión de Ventas**\n\nSelecciona archivos Excel o usa 'Cargar desde GitHub' para comenzar")
     
@@ -704,7 +1005,6 @@ elif archivos_subidos is None and st.session_state.datos_github is None:
         - ✅ Detección flexible de productos
         - ✅ Gestión de comisiones integrada
         """)
-
 # =========================================================
 # FOOTER
 # =========================================================
@@ -715,4 +1015,4 @@ st.markdown(
     "Las comisiones se guardan automáticamente"
     "</div>",
     unsafe_allow_html=True
-)        
+)    
