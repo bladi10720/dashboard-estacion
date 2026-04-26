@@ -678,12 +678,59 @@ if df_base is not None and not df_base.empty:
         
         with f3:
             if 'Producto_Info' in df_base.columns:
-                productos_opciones = convertir_a_string(df_base['Producto_Info'].unique())
-                productos = st.multiselect(
-                    "🛒 Producto:", 
-                    productos_opciones,
-                    default=productos_opciones
+                st.markdown("#### 🛒 Producto (tarjetas)")
+                
+                # Inicializar estado
+                if 'producto_seleccionado' not in st.session_state:
+                    st.session_state.producto_seleccionado = "Todos"
+                
+                # Buscador
+                busqueda_prod = st.text_input(
+                    "Buscar producto", 
+                    value="", 
+                    placeholder="Escribe para filtrar…",
+                    key="busqueda_producto"
                 )
+                
+                # Top productos por frecuencia
+                top_productos = df_base['Producto_Info'].value_counts().head(10).index.tolist()
+                
+                # Filtrar por búsqueda
+                if busqueda_prod.strip():
+                    b = normalizar_texto(busqueda_prod).replace(" ", "")
+                    filtrados = [p for p in top_productos if b in normalizar_texto(p).replace(" ", "")]
+                else:
+                    filtrados = top_productos
+                
+                # Tarjetas en grid de 5 columnas
+                cols = st.columns(5)
+                
+                def _btn_label_prod(p):
+                    selected = (st.session_state.producto_seleccionado == p)
+                    return f"✅ {p}" if selected else p
+                
+                # Botón "Todos"
+                with cols[0]:
+                    if st.button(_btn_label_prod("Todos"), use_container_width=True, key="prod_card_todos"):
+                        st.session_state.producto_seleccionado = "Todos"
+                        st.rerun()
+                
+                # Tarjetas de productos
+                for i, p in enumerate(filtrados[:9]):  # máximo 9 + Todos = 10
+                    col = cols[(i + 1) % 5]
+                    with col:
+                        if st.button(_btn_label_prod(p), use_container_width=True, key=f"prod_card_{i}"):
+                            st.session_state.producto_seleccionado = p
+                            st.rerun()
+                
+                st.caption(f"Seleccionado: **{st.session_state.producto_seleccionado}**")
+                
+                # Aplicar selección al filtro
+                if st.session_state.producto_seleccionado != "Todos":
+                    productos = [st.session_state.producto_seleccionado]
+                else:
+                    # Si está en "Todos", pasamos todos los productos
+                    productos = convertir_a_string(df_base['Producto_Info'].unique())
             else:
                 productos = []
         
