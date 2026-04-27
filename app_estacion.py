@@ -263,13 +263,6 @@ def cargar_comisiones_desde_excel():
         # Leer el archivo
         df = pd.read_excel(ruta)
         
-        # MOSTRAR DIAGNÓSTICO
-        st.write("---")
-        st.write("### 🔍 Diagnóstico de COMISION.xlsx")
-        st.write(f"**Columnas encontradas:** {list(df.columns)}")
-        st.write("**Primeras 5 filas:**")
-        st.dataframe(df.head(5))
-        
         # BUSCAR las columnas que tienen datos (no vacías)
         col_codigo = None
         col_comision = None
@@ -294,9 +287,6 @@ def cargar_comisiones_desde_excel():
         if col_comision is None and len(df.columns) > 3:
             col_comision = df.columns[3]
         
-        st.write(f"**Usando columna '{col_codigo}' para códigos**")
-        st.write(f"**Usando columna '{col_comision}' para comisiones**")
-        
         comisiones = {}
         
         for idx, row in df.iterrows():
@@ -304,19 +294,12 @@ def cargar_comisiones_desde_excel():
                 codigo = str(row[col_codigo]).strip()
                 comision = row[col_comision]
                 
-                # Mostrar algunas filas
-                if idx < 5:
-                    st.write(f"Fila {idx}: Código='{codigo}', Comisión={comision}")
-                
                 # Validar
                 if pd.notna(codigo) and pd.notna(comision) and codigo != 'nan' and comision != 0:
                     try:
                         comisiones[codigo] = float(comision)
                     except:
                         pass
-        
-        st.write(f"**Total de comisiones válidas encontradas:** {len(comisiones)}")
-        st.write("---")
         
         if comisiones:
             st.success(f"✅ Cargadas {len(comisiones)} comisiones desde Excel")
@@ -474,7 +457,7 @@ def _mes_num_a_label(mes_num: int):
     if mes_num in MESES_ES:
         return MESES_ES[mes_num].capitalize()
     return "Todos"
-def _render_selector_vendedores_cards(vendedores_opciones, max_cards=10):
+def _render_selector_vendedores_cards(vendedores_opciones, max_cards=15):
     """Selector visual por tarjetas (buttons) con estado."""
     if 'vendedor_seleccionado' not in st.session_state:
         st.session_state.vendedor_seleccionado = "Todos"
@@ -528,7 +511,7 @@ def _kpis_vendedor(df, vendedor_seleccionado: str):
     with c1:
         st.metric("Ventas (selección)", f"${total_ventas:,.0f}")
     with c2:
-        st.metric("Comisiones", f"${total_comisiones:,.0f}")
+        st.metric("Comisiones", f"${total_comisiones:,.0f}" " pesos")
     with c3:
         st.metric("Transacciones", f"{n_ventas:,}")
     with c4:
@@ -614,6 +597,23 @@ if df_base is not None and not df_base.empty:
         df_base['Producto_Info'] = df_base['Cod Producto'] + " - " + df_base['Descripcion']
     else:
         df_base['Producto_Info'] = df_base['Descripcion']
+
+    # =========================================================
+    # FECHA OPERATIVA (cierre 08:00) - solo para filtros/UX
+    # =========================================================
+    # Nota: no reemplaza 'Fecha' ni cambia comisiones; agrega columna auxiliar.
+    if 'Fecha' in df_base.columns:
+        try:
+            if 'Hora' in df_base.columns:
+                hora_str = df_base['Hora'].astype(str).str.strip()
+                # Formato esperado: "HH:MM" (ej: "08:25"). Si viene vacío/NaN, se asume 00:00.
+                hora_td = pd.to_timedelta(hora_str + ":00", errors='coerce').fillna(pd.Timedelta(0))
+                fecha_hora = df_base['Fecha'] + hora_td
+            else:
+                fecha_hora = df_base['Fecha']
+            df_base['Fecha_Operativa'] = (fecha_hora - pd.Timedelta(hours=8)).dt.normalize()
+        except Exception:
+            df_base['Fecha_Operativa'] = df_base['Fecha'].dt.normalize()
     
     # Gestión de comisiones
     interfaz_gestion_comisiones()
@@ -628,38 +628,37 @@ if df_base is not None and not df_base.empty:
             f0, f1, f3, f4 = st.columns([1, 2, 2, 2])
             
             with f0:
-                # Filtro por mes (basado en archivos Excel y/o fechas)
-                meses_detectados = set()
-                if archivos_subidos:
-                    for a in archivos_subidos:
-                        m = _extraer_mes_desde_nombre_archivo(getattr(a, "name", ""))
-                        if m:
-                            meses_detectados.add(m)
-                else:
-                    if os.path.exists("datos"):
-                        for p in glob.glob("datos/*.xlsx"):
-                            if os.path.basename(p).upper() == "COMISION.XLSX":
-                                continue
-                            m = _extraer_mes_desde_nombre_archivo(p)
-                            if m:
-                                meses_detectados.add(m)
-                
-                # Fallback si no hay meses por nombre: usar meses presentes en Fecha
-                if 'Fecha' in df_base.columns:
+                # Filtro por "Mes de negocio" (26 → 25) usando Fecha_Operativa (cierre 08:00)
+                # Mes de negocio: si Fecha_Operativa tiene día >= 26, pertenece al mes siguiente.
+                periodos = []
+                if 'Fecha_Operativa' in df_base.columns:
                     try:
-                        meses_en_datos = set(int(m) for m in df_base['Fecha'].dropna().dt.month.unique())
-                        meses_detectados |= meses_en_datos
+                        fop = df_base['Fecha_Operativa'].dropna()
+                        if not fop.empty:
+                            tmp = pd.DataFrame({'f': fop})
+                            # Mes de negocio: si el día operativo es >= 26, pertenece al mes siguiente.
+                            tmp['y_biz'] = tmp['f'].dt.year
+                            tmp['m_biz'] = tmp['f'].dt.month
+                            mask_26 = tmp['f'].dt.day >= 26
+                            tmp.loc[mask_26, 'm_biz'] = tmp.loc[mask_26, 'm_biz'] + 1
+                            # Ajuste correcto por cambio de año (12 -> 13 -> 1 y año + 1)
+                            overflow = tmp['m_biz'] == 13
+                            tmp.loc[overflow, 'm_biz'] = 1
+                            tmp.loc[overflow, 'y_biz'] = tmp.loc[overflow, 'y_biz'] + 1
+                            # periodos únicos (año, mes negocio)
+                            periodos = sorted({(int(y), int(m)) for y, m in zip(tmp['y_biz'], tmp['m_biz'])})
                     except Exception:
-                        pass
-                
-                opciones_mes = ["Todos"] + [_mes_num_a_label(m) for m in sorted(meses_detectados)]
+                        periodos = []
+
+                opciones_periodo = ["Todos"] + [f"{_mes_num_a_label(m)} {y}" for (y, m) in periodos]
                 if 'mes_seleccionado' not in st.session_state:
                     st.session_state.mes_seleccionado = "Todos"
-                
+
                 mes_sel = st.selectbox(
-                    "Mes",
-                    options=opciones_mes if opciones_mes else ["Todos"],
-                    index=(opciones_mes.index(st.session_state.mes_seleccionado) if st.session_state.mes_seleccionado in opciones_mes else 0),
+                    "Mes (negocio 26→25)",
+                    options=opciones_periodo if opciones_periodo else ["Todos"],
+                    index=(opciones_periodo.index(st.session_state.mes_seleccionado) if st.session_state.mes_seleccionado in opciones_periodo else 0),
+                    help="El día operativo cierra a las 08:00. Ventas antes de 08:00 cuentan para el día anterior. El mes de negocio va del 26 al 25.",
                 )
                 st.session_state.mes_seleccionado = mes_sel
             
@@ -686,7 +685,7 @@ if df_base is not None and not df_base.empty:
                 )
             else:
                 productos = []
-                
+
         with f4:
             if 'MOP1' in df_base.columns:
                 medios_opciones = convertir_a_string(df_base['MOP1'].dropna().unique())
@@ -703,7 +702,7 @@ if df_base is not None and not df_base.empty:
         # Selector de vendedor tipo tarjetas (reemplaza selectores de vendedor)
         if 'Nombre Cajero' in df_base.columns:
             st.markdown("#### 👤 Vendedor (tarjetas)")
-            _render_selector_vendedores_cards(df_base['Nombre Cajero'].unique(), max_cards=10)
+            _render_selector_vendedores_cards(df_base['Nombre Cajero'].unique(), max_cards=15)
         else:
             st.info("No hay columna de vendedor para seleccionar.")
     # =========================================================
@@ -712,16 +711,25 @@ if df_base is not None and not df_base.empty:
     mask = pd.Series([True] * len(df_base))
     
     # Filtro por mes (si hay fecha)
-    if 'Fecha' in df_base.columns and st.session_state.get("mes_seleccionado", "Todos") != "Todos":
+    if 'Fecha_Operativa' in df_base.columns and st.session_state.get("mes_seleccionado", "Todos") != "Todos":
         try:
-            mes_label = st.session_state.mes_seleccionado.strip().lower()
-            mes_num = None
-            for m, name in MESES_ES.items():
-                if name == mes_label:
-                    mes_num = m
-                    break
-            if mes_num:
-                mask &= (df_base['Fecha'].dt.month == mes_num)
+            sel = str(st.session_state.mes_seleccionado).strip()
+            # Esperado: "Mes Año" (ej: "Marzo 2026")
+            parts = sel.split()
+            if len(parts) >= 2:
+                y = int(parts[-1])
+                mes_label = " ".join(parts[:-1]).strip().lower()
+                mes_num = None
+                for m, name in MESES_ES.items():
+                    if name == mes_label:
+                        mes_num = m
+                        break
+                if mes_num:
+                    fin = pd.Timestamp(year=y, month=mes_num, day=25)
+                    # Inicio del periodo: día 26 del mes anterior al "mes de negocio"
+                    prev = fin - pd.DateOffset(months=1)
+                    ini = pd.Timestamp(year=prev.year, month=prev.month, day=26)
+                    mask &= (df_base['Fecha_Operativa'] >= ini) & (df_base['Fecha_Operativa'] <= fin)
         except Exception:
             pass
     
