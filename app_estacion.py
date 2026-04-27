@@ -676,18 +676,17 @@ if df_base is not None and not df_base.empty:
                 else:
                     rango = []
         
-with f3:
-    if 'Producto_Info' in df_base.columns:
-        productos_opciones = convertir_a_string(df_base['Producto_Info'].dropna().unique())
-        if productos_opciones:
-            productos = st.multiselect(
-                "🏪 Producto:",
-                productos_opciones,
-                default=productos_opciones
-            )
-        else:
-            productos = []
-        
+        with f3:
+            if 'Producto_Info' in df_base.columns:
+                productos_opciones = convertir_a_string(df_base['Producto_Info'].unique())
+                productos = st.multiselect(
+                    "🛒 Producto:", 
+                    productos_opciones,
+                    default=productos_opciones
+                )
+            else:
+                productos = []
+                
         with f4:
             if 'MOP1' in df_base.columns:
                 medios_opciones = convertir_a_string(df_base['MOP1'].dropna().unique())
@@ -825,7 +824,7 @@ with f3:
                     'Cantidad': '{:,.1f}'
                 }),
                 use_container_width=True,
-                height=400
+                height=400 
             )
         
         # Exportar
