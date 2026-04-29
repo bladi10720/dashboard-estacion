@@ -330,7 +330,7 @@ def guardar_comisiones(comisiones):
         st.error(f"Error al guardar comisiones: {e}")
         return False
 def cargar_desde_github():
-    """Carga archivos desde la carpeta 'datos/' de GitHub"""
+    """Carga archivos desde la carpeta local 'datos/' (sin GitHub)."""
     if not os.path.exists("datos"):
         return None
     
@@ -538,24 +538,24 @@ with st.expander("📁 Fuente de Datos", expanded=True):
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("### 📂 Datos desde GitHub")
+        st.markdown("### 📂 Datos desde carpeta local (`datos/`)")
         
         # Mostrar archivos disponibles
         if os.path.exists("datos"):
             archivos = glob.glob("datos/*.xlsx")
             if archivos:
-                st.info(f"📄 {len(archivos)} archivo(s) en GitHub")
+                st.info(f"📄 {len(archivos)} archivo(s) encontrados en `datos/`")
                 for a in archivos[:5]:
                     st.caption(f"• {os.path.basename(a)}")
             else:
                 st.warning("No hay archivos en la carpeta 'datos/'")
         
-        if st.button("🔄 Cargar desde GitHub", use_container_width=True):
+        if st.button("🔄 Cargar desde `datos/`", use_container_width=True):
             with st.spinner('Cargando archivos...'):
                 df_temp = cargar_desde_github()
                 if df_temp is not None:
                     st.session_state.datos_github = df_temp
-                    st.success(f"✅ Cargados {len(df_temp)} registros desde GitHub")
+                    st.success(f"✅ Cargados {len(df_temp)} registros desde `datos/`")
                     st.rerun()
                 else:
                     st.error("No se encontraron archivos en la carpeta 'datos/'")
@@ -583,7 +583,7 @@ if archivos_subidos:
                     st.warning(f"⚠️ {error}")
 elif st.session_state.datos_github is not None:
     df_base = st.session_state.datos_github
-    st.info(f"📊 Usando datos de GitHub ({len(df_base)} registros)")
+    st.info(f"📊 Usando datos de `datos/` ({len(df_base)} registros)")
 # =========================================================
 # PROCESAR Y MOSTRAR DATOS
 # =========================================================
@@ -848,7 +848,7 @@ if df_base is not None and not df_base.empty:
                     use_container_width=True
                 )
 elif archivos_subidos is None and st.session_state.datos_github is None:
-    st.info("👋 **Bienvenido al Sistema de Gestión de Ventas**\n\nSelecciona archivos Excel o usa 'Cargar desde GitHub' para comenzar")
+    st.info("👋 **Bienvenido al Sistema de Gestión de Ventas**\n\nSelecciona archivos Excel o usa 'Cargar desde `datos/`' para comenzar")
     
     with st.expander("📖 Guía Rápida"):
         st.markdown("""
